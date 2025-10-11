@@ -1,103 +1,351 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { JSX, useEffect, useMemo, useState } from 'react';
+import { formatISO, subDays } from 'date-fns';
+import type {
+  PR,
+  JiraIssue,
+  StatsResponse,
+  UsersResponse,
+  GithubUser,
+  JiraUserLite,
+  ProjectsResponse,
+  JiraProjectLite,
+} from '../lib/types';
+import { KPIsView } from './components/KPIs';
+import { LineByDay } from './components/LineByDay';
+import { SearchableSelect, Option } from './components/SearchableSelect';
+
+export default function Page(): JSX.Element {
+  // selections
+  const [ghLogin, setGhLogin] = useState<string>('');
+  const [jiraAccountId, setJiraAccountId] = useState<string>('');
+  const [projectKey, setProjectKey] = useState<string>(''); // NEW
+  // dates
+  const [from, setFrom] = useState<string>(formatISO(subDays(new Date(), 14), { representation: 'date' }));
+  const [to, setTo] = useState<string>(formatISO(new Date(), { representation: 'date' }));
+  // data
+  const [users, setUsers] = useState<UsersResponse | null>(null);
+  const [projects, setProjects] = useState<ProjectsResponse | null>(null);
+  const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
+  const [loadingProjects, setLoadingProjects] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [data, setData] = useState<StatsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load users once
+  useEffect(() => {
+    (async () => {
+      setLoadingUsers(true);
+      try {
+        const resp = await fetch('/api/users');
+        if (!resp.ok) throw new Error(await resp.text());
+        const json: UsersResponse = await resp.json();
+        setUsers(json);
+        if (!ghLogin && json.github.length > 0) setGhLogin(json.github[0].login);
+        if (!jiraAccountId && json.jira.length > 0) setJiraAccountId(json.jira[0].accountId);
+      } catch {
+        // Silent: UI falls back to inputs
+      } finally {
+        setLoadingUsers(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load projects once
+  useEffect(() => {
+    (async () => {
+      setLoadingProjects(true);
+      try {
+        const resp = await fetch('/api/projects');
+        if (!resp.ok) throw new Error(await resp.text());
+        const json: ProjectsResponse = await resp.json();
+        setProjects(json);
+        if (!projectKey && json.projects.length > 0) {
+          // Leave default as blank = "All projects"
+          // If you prefer auto-select first, uncomment next line:
+          // setProjectKey(json.projects[0].key);
+        }
+      } catch {
+        // Silent
+      } finally {
+        setLoadingProjects(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const ghOptions: Option[] = useMemo(() => {
+    return (users?.github ?? []).map((u: GithubUser) => ({
+      value: u.login,
+      label: u.name ? `${u.name} (${u.login})` : u.login,
+      iconUrl: u.avatarUrl,
+    }));
+  }, [users]);
+
+  const jiraOptions: Option[] = useMemo(() => {
+    return (users?.jira ?? []).map((u: JiraUserLite) => ({
+      value: u.accountId,
+      label: u.displayName,
+      subtitle: u.emailAddress,
+    }));
+  }, [users]);
+
+  const projectOptions: Option[] = useMemo(() => {
+    const list = (projects?.projects ?? []).map((p: JiraProjectLite) => ({
+      value: p.key,
+      label: `${p.name} (${p.key})`,
+    }));
+    // Add "All projects" sentinel at the top
+    return [{ value: '', label: 'All projects' }, ...list];
+  }, [projects]);
+
+  async function run(): Promise<void> {
+    if (!ghLogin) { setError('Select a GitHub user'); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      const url = new URL('/api/stats', window.location.origin);
+      url.searchParams.set('login', ghLogin);
+      url.searchParams.set('from', from);
+      url.searchParams.set('to', to);
+      if (jiraAccountId) url.searchParams.set('jiraAccountId', jiraAccountId);
+      if (projectKey) url.searchParams.set('projectKey', projectKey); // NEW
+
+      const resp = await fetch(url.toString());
+      if (!resp.ok) throw new Error(await resp.text());
+      const json: StatsResponse = await resp.json();
+      setData(json);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Error';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const ticketUrlByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    if (data) {
+      data.tickets.forEach((t: JiraIssue) => map.set(t.key, t.url));
+    }
+    return map;
+  }, [data]);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Developer Performance Dashboard</h1>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+      {/* Controls */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>
+        <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>GitHub user</label>
+          {ghOptions.length > 0 ? (
+            <SearchableSelect
+              items={ghOptions}
+              value={ghLogin}
+              onChange={setGhLogin}
+              placeholder="Search GitHub users…"
+              disabled={loadingUsers}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          ) : (
+            <input
+              placeholder="octocat"
+              value={ghLogin}
+              onChange={e => setGhLogin(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+            />
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Jira user</label>
+          {jiraOptions.length > 0 ? (
+            <SearchableSelect
+              items={jiraOptions}
+              value={jiraAccountId}
+              onChange={setJiraAccountId}
+              placeholder="Search Jira users…"
+              disabled={loadingUsers}
+            />
+          ) : (
+            <input
+              placeholder="Paste Jira accountId (or leave blank)"
+              value={jiraAccountId}
+              onChange={e => setJiraAccountId(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+            />
+          )}
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Project</label>
+          {projectOptions.length > 0 ? (
+            <SearchableSelect
+              items={projectOptions}
+              value={projectKey}
+              onChange={setProjectKey}
+              placeholder="Filter by project…"
+              disabled={loadingProjects}
+            />
+          ) : (
+            <input
+              placeholder="Project key (e.g., PE)"
+              value={projectKey}
+              onChange={e => setProjectKey(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+            />
+          )}
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>From</label>
+          <input type="date"
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+            value={from} onChange={e => setFrom(e.target.value)} />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>To</label>
+          <input type="date"
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+            value={to} onChange={e => setTo(e.target.value)} />
+        </div>
+
+        <div>
+          <button
+            onClick={run}
+            disabled={loading || loadingUsers}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: 0, background: '#111', color: '#fff', opacity: (loading || loadingUsers) ? 0.6 : 1 }}
+          >
+            {loading ? 'Loading…' : 'Fetch'}
+          </button>
+        </div>
+      </div>
+
+      {/* warnings */}
+      {users?.warnings && users.warnings.length > 0 && (
+        <div style={{ padding: 12, background: '#fff7ed', color: '#7c2d12', borderRadius: 8, marginBottom: 16 }}>
+          {users.warnings.map((w) => <div key={w}>{w}</div>)}
+        </div>
+      )}
+      {projects?.warnings && projects.warnings.length > 0 && (
+        <div style={{ padding: 12, background: '#fff7ed', color: '#7c2d12', borderRadius: 8, marginBottom: 16 }}>
+          {projects.warnings.map((w) => <div key={w}>{w}</div>)}
+        </div>
+      )}
+      {data?.warnings && data.warnings.length > 0 && (
+        <div style={{ padding: 12, background: '#fff7ed', color: '#7c2d12', borderRadius: 8, marginBottom: 16 }}>
+          {data.warnings.map((w) => <div key={w}>{w}</div>)}
+        </div>
+      )}
+
+      {/* errors */}
+      {error && (
+        <div style={{ padding: 12, background: '#ffe4e6', color: '#7f1d1d', borderRadius: 8, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {/* dashboard */}
+      {data && (
+        <>
+          <KPIsView kpis={data.kpis} />
+          <div style={{ height: 12 }} />
+          <LineByDay items={data.timeseries} />
+
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, marginTop: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+            <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Pull Requests</h2>
+            <div style={{ overflow: 'auto' }}>
+              <table style={{ width: '100%', fontSize: 14 }}>
+  <thead>
+    <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
+      <th style={{ padding: '8px 0' }}>Created</th>
+      <th>Title</th>
+      <th>Status</th> {/* NEW */}
+      <th>Repo</th>
+      <th>Additions</th>
+      <th>Deletions</th>
+      <th>JIRA</th>
+    </tr>
+  </thead>
+  <tbody>
+    {data.prs.map((p: PR) => {
+      const statusBadge = (() => {
+        // prettier, readable status labels with dates
+        if (p.state === 'MERGED' && p.mergedAt) {
+          return (
+            <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: 999, fontSize: 12 }}>
+              Merged {p.mergedAt.slice(0,10)}
+            </span>
+          );
+        }
+        if (p.state === 'CLOSED' && p.closedAt) {
+          return (
+            <span style={{ padding: '2px 8px', background: '#fef2f2', color: '#991b1b', borderRadius: 999, fontSize: 12 }}>
+              Closed {p.closedAt.slice(0,10)}
+            </span>
+          );
+        }
+        if (p.isDraft) {
+          return (
+            <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12 }}>
+              Draft
+            </span>
+          );
+        }
+        return (
+          <span style={{ padding: '2px 8px', background: '#eff6ff', color: '#1e40af', borderRadius: 999, fontSize: 12 }}>
+            Open
+          </span>
+        );
+      })();
+
+      return (
+        <tr key={p.id} style={{ borderBottom: '1px solid #f1f1f1' }}>
+          <td style={{ padding: '8px 0' }}>{p.createdAt.slice(0,10)}</td>
+          <td><a href={p.url} target="_blank" rel="noreferrer">{p.title}</a></td>
+          <td>{statusBadge}</td>
+          <td>{p.repository.owner}/{p.repository.name}</td>
+          <td>{p.additions}</td>
+          <td>{p.deletions}</td>
+          <td>
+            {(p.jiraKeys ?? []).map((k: string) => {
+              const url = ticketUrlByKey.get(k);
+              return url ? (
+                <a key={k} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>
+                  {k}
+                </a>
+              ) : null;
+            })}
+          </td>
+        </tr>
+      );
+    })}
+  </tbody>
+</table>
+
+            </div>
+          </div>
+
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, marginTop: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+            <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Tickets</h2>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {data.tickets.map((t: JiraIssue) => (
+                <li key={t.id} style={{ marginBottom: 6 }}>
+                  <a href={t.url} target="_blank" rel="noreferrer">{t.key}</a>
+                  {` — `}
+                  {t.status ? <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12, marginRight: 6 }}>{t.status}</span> : null}
+                  {t.summary} {t.storyPoints ? ` (${t.storyPoints} SP)` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   );
 }
