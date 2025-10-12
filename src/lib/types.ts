@@ -15,6 +15,10 @@ export interface PR {
   deletions: number;
   repository: { owner: string; name: string };
 
+  // NEW: extra timestamps used for lifecycle calculations
+  firstReviewAt?: string | null;
+  readyForReviewAt?: string | null;
+
   jiraKeys?: string[];
 }
 
@@ -85,4 +89,50 @@ export interface JiraProjectLite {
 export interface ProjectsResponse {
   projects: JiraProjectLite[];
   warnings?: string[];
+}
+// --- NEW ---
+export interface PRLifecycle {
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  createdAt: string;
+  readyForReviewAt?: string | null;
+  firstReviewAt?: string | null;
+  mergedAt?: string | null;
+  closedAt?: string | null;
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  isDraft: boolean;
+
+  // computed (hours)
+  timeToReadyHours?: number | null;
+  timeToFirstReviewHours?: number | null;
+  reviewToMergeHours?: number | null;
+  cycleTimeHours?: number | null;
+}
+
+export interface LifecycleStats {
+  sampleSize: number;
+  medianTimeToReadyHours?: number | null;
+  medianTimeToFirstReviewHours?: number | null;
+  medianReviewToMergeHours?: number | null;
+  medianCycleTimeHours?: number | null;
+}
+
+// extend API payload
+export interface StatsResponse {
+  from: string;
+  to: string;
+  login: string;
+  kpis: KPIs;
+  timeseries: TimeseriesItem[];
+  prs: PR[];
+  tickets: JiraIssue[];
+  warnings?: string[];
+
+  // NEW
+  lifecycle?: {
+    items: PRLifecycle[];
+    stats: LifecycleStats;
+  };
 }

@@ -15,6 +15,7 @@ import type {
 import { KPIsView } from './components/KPIs';
 import { LineByDay } from './components/LineByDay';
 import { SearchableSelect, Option } from './components/SearchableSelect';
+import { PRLifecycleView } from './components/PRLifeCycle';
 
 export default function Page(): JSX.Element {
   // selections
@@ -256,78 +257,82 @@ export default function Page(): JSX.Element {
           <KPIsView kpis={data.kpis} />
           <div style={{ height: 12 }} />
           <LineByDay items={data.timeseries} />
-
+          {data.lifecycle && (
+            <>
+              <div style={{ height: 12 }} />
+              <PRLifecycleView items={data.lifecycle.items} stats={data.lifecycle.stats} />
+            </>
+          )}
           <div style={{ background: 'white', borderRadius: 12, padding: 16, marginTop: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
             <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Pull Requests</h2>
             <div style={{ overflow: 'auto' }}>
               <table style={{ width: '100%', fontSize: 14 }}>
-  <thead>
-    <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
-      <th style={{ padding: '8px 0' }}>Created</th>
-      <th>Title</th>
-      <th>Status</th> {/* NEW */}
-      <th>Repo</th>
-      <th>Additions</th>
-      <th>Deletions</th>
-      <th>JIRA</th>
-    </tr>
-  </thead>
-  <tbody>
-    {data.prs.map((p: PR) => {
-      const statusBadge = (() => {
-        // prettier, readable status labels with dates
-        if (p.state === 'MERGED' && p.mergedAt) {
-          return (
-            <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: 999, fontSize: 12 }}>
-              Merged {p.mergedAt.slice(0,10)}
-            </span>
-          );
-        }
-        if (p.state === 'CLOSED' && p.closedAt) {
-          return (
-            <span style={{ padding: '2px 8px', background: '#fef2f2', color: '#991b1b', borderRadius: 999, fontSize: 12 }}>
-              Closed {p.closedAt.slice(0,10)}
-            </span>
-          );
-        }
-        if (p.isDraft) {
-          return (
-            <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12 }}>
-              Draft
-            </span>
-          );
-        }
-        return (
-          <span style={{ padding: '2px 8px', background: '#eff6ff', color: '#1e40af', borderRadius: 999, fontSize: 12 }}>
-            Open
-          </span>
-        );
-      })();
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
+                    <th style={{ padding: '8px 0' }}>Created</th>
+                    <th>Title</th>
+                    <th>Status</th> {/* NEW */}
+                    <th>Repo</th>
+                    <th>Additions</th>
+                    <th>Deletions</th>
+                    <th>JIRA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.prs.map((p: PR) => {
+                    const statusBadge = (() => {
+                      // prettier, readable status labels with dates
+                      if (p.state === 'MERGED' && p.mergedAt) {
+                        return (
+                          <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: 999, fontSize: 12 }}>
+                            Merged {p.mergedAt.slice(0,10)}
+                          </span>
+                        );
+                      }
+                      if (p.state === 'CLOSED' && p.closedAt) {
+                        return (
+                          <span style={{ padding: '2px 8px', background: '#fef2f2', color: '#991b1b', borderRadius: 999, fontSize: 12 }}>
+                            Closed {p.closedAt.slice(0,10)}
+                          </span>
+                        );
+                      }
+                      if (p.isDraft) {
+                        return (
+                          <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12 }}>
+                            Draft
+                          </span>
+                        );
+                      }
+                      return (
+                        <span style={{ padding: '2px 8px', background: '#eff6ff', color: '#1e40af', borderRadius: 999, fontSize: 12 }}>
+                          Open
+                        </span>
+                      );
+                    })();
 
-      return (
-        <tr key={p.id} style={{ borderBottom: '1px solid #f1f1f1' }}>
-          <td style={{ padding: '8px 0' }}>{p.createdAt.slice(0,10)}</td>
-          <td><a href={p.url} target="_blank" rel="noreferrer">{p.title}</a></td>
-          <td>{statusBadge}</td>
-          <td>{p.repository.owner}/{p.repository.name}</td>
-          <td>{p.additions}</td>
-          <td>{p.deletions}</td>
-          <td>
-            {(p.jiraKeys ?? []).map((k: string) => {
-              const url = ticketUrlByKey.get(k);
-              return url ? (
-                <a key={k} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>
-                  {k}
-                </a>
-              ) : null;
-            })}
-          </td>
-        </tr>
-      );
-    })}
-  </tbody>
-</table>
-
+                    return (
+                      <tr key={p.id} style={{ borderBottom: '1px solid #f1f1f1' }}>
+                        <td style={{ padding: '8px 0' }}>{p.createdAt.slice(0,10)}</td>
+                        <td><a href={p.url} target="_blank" rel="noreferrer">{p.title}</a></td>
+                        <td>{statusBadge}</td>
+                        <td>{p.repository.owner}/{p.repository.name}</td>
+                        <td>{p.additions}</td>
+                        <td>{p.deletions}</td>
+                        <td>
+                          {(p.jiraKeys ?? []).map((k: string) => {
+                            const url = ticketUrlByKey.get(k);
+                            return url ? (
+                              <a key={k} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>
+                                {k}
+                              </a>
+                            ) : null;
+                          })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 
