@@ -136,11 +136,16 @@ export async function getJiraDoneIssues(params: {
   // Exact assignee by accountId (correct syntax for Cloud)
   const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
 
+  // Issue Type
+  const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
+  const issueTypeFilter = issueTypes.length ? `AND issuetype in (${issueTypes.join(',')})` : '';
+
   // 1) Status changed during window (broad, covers transitions)
   const jql1 = [
     `status CHANGED DURING ("${from}","${to}")`,
     projectFilter,
     assigneeExact,
+    issueTypeFilter,
   ].filter(Boolean).join(' ');
 
   // 2) Updated during window (very common signal)
@@ -148,6 +153,7 @@ export async function getJiraDoneIssues(params: {
     `updated >= "${from}" AND updated <= "${to}"`,
     projectFilter,
     assigneeExact,
+    issueTypeFilter,
   ].filter(Boolean).join(' AND ');
 
   // 3) Created during window (fallback)
@@ -155,6 +161,7 @@ export async function getJiraDoneIssues(params: {
     `created >= "${from}" AND created <= "${to}"`,
     projectFilter,
     assigneeExact,
+    issueTypeFilter,
   ].filter(Boolean).join(' AND ');
 
   const raw1 = await runJQL({ jql: jql1, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);

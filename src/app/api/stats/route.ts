@@ -3,6 +3,7 @@ import { getGithubPRsWithStats } from '../../../lib/github';
 import { getJiraDoneIssues } from '../../../lib/jira';
 import { aggregateDaily } from '../../../lib/aggregate';
 import type { StatsResponse, KPIs, JiraIssue, PR } from '../../../lib/types';
+import { computeLifecycle } from '../../../lib/aggregate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,10 @@ export async function GET(req: Request) {
 
     const timeseries = aggregateDaily({ from, to, prs: prsLinked, jiraIssues });
 
+
+
+    const lifecycle = computeLifecycle(prsLinked);
+
     const payload: StatsResponse = {
       from, to, login,
       kpis,
@@ -55,6 +60,7 @@ export async function GET(req: Request) {
       prs: prsLinked,
       tickets: jiraIssues,
       warnings: warnings.length ? warnings : undefined,
+      lifecycle, // <-- NEW
     };
 
     return NextResponse.json(payload);

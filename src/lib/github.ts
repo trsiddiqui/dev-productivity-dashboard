@@ -3,6 +3,11 @@ import type { GithubUser, PR } from './types';
 
 interface GHRepoOwner { login: string }
 interface GHRepo { name: string; owner: GHRepoOwner }
+interface GHReviewNode { submittedAt: string | null; state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING' }
+interface GHReadyEvent { __typename: 'ReadyForReviewEvent'; createdAt: string }
+interface GHTimeline {
+  nodes: Array<GHReadyEvent>;
+}
 interface GHPullRequestNode {
   id: string;
   number: number;
@@ -16,6 +21,8 @@ interface GHPullRequestNode {
   additions: number;
   deletions: number;
   repository: GHRepo;
+  reviews: { nodes: GHReviewNode[] };
+  timelineItems: GHTimeline;
 }
 interface GHSearchEdge { node: GHPullRequestNode }
 interface GHSearchPageInfo { hasNextPage: boolean; endCursor: string | null }
@@ -31,7 +38,6 @@ export async function getGithubPRsWithStats(params: {
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
 
   const scope = buildScopeFilter();
-  // 🔁 Created in window by this author (no longer requires is:merged)
   const q = `is:pr author:${login} created:${from}..${to} ${scope}`.trim();
 
   const query = `
@@ -53,6 +59,17 @@ export async function getGithubPRsWithStats(params: {
               additions
               deletions
               repository { name owner { login } }
+
+              reviews(first: 50) {
+                nodes { submittedAt state }
+              }
+
+              timelineItems(itemTypes: READY_FOR_REVIEW_EVENT, first: 10) {
+                nodes {
+                  __typename
+                  ... on ReadyForReviewEvent { createdAt }
+                }
+              }
             }
           }
         }
@@ -65,11 +82,11 @@ export async function getGithubPRsWithStats(params: {
     'Content-Type': 'application/json',
   };
 
-  const all: PR[] = [];
-  let hasNext = true;
+  const out: PR[] = [];
   let after: string | null = null;
+  let hasNext = true;
 
-  while (hasNext && all.length < 600) {
+  while (hasNext && out.length < 600) {
     const resp = await fetch('https://api.github.com/graphql', {
       method: 'POST',
       headers,
@@ -80,9 +97,29 @@ export async function getGithubPRsWithStats(params: {
       throw new Error(`GitHub GraphQL error: ${JSON.stringify(json.errors ?? json)}`);
     }
     const data = json.data.search;
+
     for (const edge of data.edges) {
       const n = edge.node;
-      all.push({
+
+      // earliest non-null review submission time
+      let firstReviewAt: string | null = null;
+      for (const r of n.reviews.nodes) {
+        if (r.submittedAt) {
+          if (!firstReviewAt || r.submittedAt < firstReviewAt) firstReviewAt = r.submittedAt;
+        }
+      }
+
+      // earliest "ready for review" event time
+      let readyForReviewAt: string | null = null;
+      for (const ev of n.timelineItems.nodes) {
+        if (ev.__typename === 'ReadyForReviewEvent') {
+          if (!readyForReviewAt || ev.createdAt < readyForReviewAt) {
+            readyForReviewAt = ev.createdAt;
+          }
+        }
+      }
+
+      out.push({
         id: n.id,
         number: n.number,
         title: n.title,
@@ -95,14 +132,16 @@ export async function getGithubPRsWithStats(params: {
         additions: n.additions,
         deletions: n.deletions,
         repository: { owner: n.repository.owner.login, name: n.repository.name },
+        firstReviewAt,
+        readyForReviewAt,
       });
     }
+
     hasNext = data.pageInfo.hasNextPage;
     after = data.pageInfo.endCursor;
   }
 
-  // Sort by creation date (ascending)
-  return all.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 function buildScopeFilter(): string {
