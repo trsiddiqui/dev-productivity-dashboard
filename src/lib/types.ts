@@ -31,7 +31,12 @@ export interface JiraIssue {
   resolutiondate?: string;
   storyPoints?: number;
   status?: string;
-  url: string;
+  url: string;  
+  // NEW (optional) - used by sprint helpers and future UI columns
+  created?: string;
+  issueType?: string;
+  parentKey?: string;
+  epicKey?: string;
 }
 
 export interface KPIs {
@@ -136,3 +141,81 @@ export interface StatsResponse {
     stats: LifecycleStats;
   };
 }
+
+// --- Sprint types ---
+
+export interface JiraSprintLite {
+  id: number;
+  name: string;
+  state: 'active' | 'future' | 'closed' | string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface SprintKPI {
+  // scope
+  committedSP: number;
+  scopeAddedSP: number;
+  scopeRemovedSP: number;
+
+  // ORIGINAL simple "completed" (kept for compatibility; now equals Complete)
+  completedSP: number;
+  remainingSP: number;
+  completionPct: number;
+
+  // NEW: development progress (up to Reviewed)
+  devCompletedSP: number;
+  devRemainingSP: number;
+  devCompletionPct: number;
+
+  // NEW: complete progress (up to Approved)
+  completeCompletedSP: number;
+  completeRemainingSP: number;
+  completeCompletionPct: number;
+}
+
+export interface CompletedByAssignee {
+  assignee: string;     // display name or "Unassigned"
+  devPoints: number;    // tickets that reached Review (development complete)
+  completePoints: number; // tickets that reached Approved/Done (dev+QA complete)
+}
+
+export interface SprintBurnItem {
+  date: string;
+  committed: number;
+
+  // Actuals (existing)
+  completed: number;
+  remaining: number;
+  devCompleted: number;
+  devRemaining: number;
+  completeCompleted: number;
+  completeRemaining: number;
+
+  // NEW: forecast values (populated only for dates after "today")
+  devForecastCompleted?: number;
+  devForecastRemaining?: number;
+  completeForecastCompleted?: number;
+  completeForecastRemaining?: number;
+}
+
+export interface SprintStatsResponse {
+  sprintId: number;
+  sprintName: string;
+  startDate?: string;
+  endDate?: string;
+  kpis: SprintKPI;
+  burn: SprintBurnItem[];
+  issues: JiraIssue[];
+  warnings?: string[];
+
+  completedByAssignee?: CompletedByAssignee[];
+  ticketsInQA?: number;
+
+  // NEW: optional predicted completion dates
+  forecast?: {
+    devCompletionDate?: string;       // YYYY-MM-DD when dev (Review) would hit scope
+    completeCompletionDate?: string;  // YYYY-MM-DD when complete (Approved/Done) would hit scope
+  };
+}
+

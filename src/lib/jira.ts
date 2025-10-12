@@ -244,3 +244,292 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
 
   return out;
 }
+
+/* ================== Agile API helpers (Sprints) ================== */
+
+import type { JiraIssue as JiraIssueModel, JiraSprintLite } from './types';
+
+interface JiraBoard { id: number; name: string; type?: string }
+
+interface JiraSprintValue {
+  id: number;
+  name: string;
+  state?: string;               // Jira returns "active" | "future" | "closed" (string union loosely)
+  startDate?: string;
+  endDate?: string;
+}
+interface JiraSprintsResp {
+  values?: JiraSprintValue[];
+  isLast?: boolean;
+}
+
+// Shape of fields we read from Agile "issue" responses
+interface JiraAgileIssueFields {
+  summary: string;
+  assignee?: { displayName?: string };
+  status?: { name?: string };
+  issuetype?: { name?: string; subtask?: boolean };
+  created?: string;
+  parent?: { key?: string };
+  // dynamic bag for custom fields like story points & epic link
+  [key: string]: unknown;
+}
+interface JiraAgileIssue {
+  id: string;
+  key: string;
+  fields: JiraAgileIssueFields;
+}
+
+function jiraAuthHeader(): string {
+  return 'Basic ' + Buffer
+    .from(`${cfg.jiraEmail}:${cfg.jiraToken}`)
+    .toString('base64');
+}
+
+function jiraBase(): string {
+  // reuse your existing normalizedBase() from earlier in this file
+  return normalizedBase();
+}
+
+/** List sprints for a board (uses Agile API). */
+export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]> {
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+  const base = jiraBase();
+  const auth = jiraAuthHeader();
+
+  const out: JiraSprintLite[] = [];
+  let startAt = 0;
+  const maxRes = 50;
+
+  while (true) {
+    const url = new URL(`${base}/rest/agile/1.0/board/${boardId}/sprint`);
+    url.searchParams.set('startAt', String(startAt));
+    url.searchParams.set('maxResults', String(maxRes));
+
+    const resp = await fetch(url.toString(), {
+      headers: { Authorization: auth, Accept: 'application/json' }
+    });
+    if (!resp.ok) break;
+
+    const data = (await resp.json()) as JiraSprintsResp;
+    const vals = data.values ?? [];
+
+    out.push(
+      ...vals.map((v): JiraSprintLite => ({
+        id: v.id,
+        name: v.name,
+        state: v.state ?? 'unknown',
+        startDate: v.startDate,
+        endDate: v.endDate,
+      }))
+    );
+
+    if (vals.length < maxRes || data.isLast) break;
+    startAt += maxRes;
+  }
+
+  return out;
+}
+
+/** Get sprint meta (start/end/state/name). */
+export async function getJiraSprintMeta(
+  sprintId: number
+): Promise<{ id: number; name: string; state?: string; startDate?: string; endDate?: string } | null> {
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return null;
+  const base = jiraBase();
+  const auth = jiraAuthHeader();
+
+  const resp = await fetch(`${base}/rest/agile/1.0/sprint/${sprintId}`, {
+    headers: { Authorization: auth, Accept: 'application/json' }
+  });
+  if (!resp.ok) return null;
+
+  const d = (await resp.json()) as {
+    id: number; name: string; state?: string; startDate?: string; endDate?: string;
+  };
+  return { id: d.id, name: d.name, state: d.state, startDate: d.startDate, endDate: d.endDate };
+}
+
+/** Issues currently in a sprint. Normalizes to your JiraIssue shape and filters to Story/Bug/Task/Spike. */
+export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueModel[]> {
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+  const base = jiraBase();
+  const auth = jiraAuthHeader();
+
+  const fields = [
+    'summary',
+    'assignee',
+    'status',
+    'issuetype',
+    'created',
+    'parent',
+    cfg.jiraStoryPointsField,
+    'customfield_10014',      // Epic Link (common default key on Cloud)
+    'resolutiondate'
+  ];
+  const allowed = new Set(['story', 'bug', 'task', 'spike']);
+
+  const out: JiraIssueModel[] = [];
+  let startAt = 0;
+  const maxRes = 50;
+
+  while (true) {
+    const url = new URL(`${base}/rest/agile/1.0/sprint/${sprintId}/issue`);
+    url.searchParams.set('startAt', String(startAt));
+    url.searchParams.set('maxResults', String(maxRes));
+    url.searchParams.set('fields', fields.join(','));
+
+    const resp = await fetch(url.toString(), {
+      headers: { Authorization: auth, Accept: 'application/json' }
+    });
+    if (!resp.ok) break;
+
+    const data = (await resp.json()) as { issues?: JiraAgileIssue[] };
+    const list = data.issues ?? [];
+
+    for (const it of list) {
+      const typeName = it.fields.issuetype?.name?.toLowerCase() ?? '';
+      if (!allowed.has(typeName)) continue;
+
+      const spVal = (it.fields as Record<string, unknown>)[cfg.jiraStoryPointsField];
+      const storyPoints = typeof spVal === 'number' ? spVal : undefined;
+      const epicKey = (it.fields as Record<string, unknown>)['customfield_10014'] as string | undefined;
+
+      out.push({
+        id: it.id,
+        key: it.key,
+        summary: it.fields.summary,
+        assignee: it.fields.assignee?.displayName,
+        status: it.fields.status?.name,
+        created: it.fields.created,               // now typed on JiraIssue
+        storyPoints,
+        url: `${base}/browse/${it.key}`,
+        issueType: it.fields.issuetype?.name,     // now typed on JiraIssue
+        parentKey: it.fields.parent?.key,         // now typed on JiraIssue
+        epicKey,                                  // now typed on JiraIssue
+        resolutiondate: it.fields.resolutiondate as (string | undefined),
+      });
+    }
+
+    if (list.length < maxRes) break;
+    startAt += maxRes;
+  }
+
+  return out;
+}
+
+/** Determine scope changes by inspecting changelogs for "Sprint" field transitions. */
+export async function getJiraSprintScopeChanges(
+  sprintId: number,
+  issueKeys: string[],
+  sprintStart?: string
+): Promise<Record<string, 'added' | 'removed' | 'committed'>> {
+  const base = jiraBase();
+  const auth = jiraAuthHeader();
+  const result: Record<string, 'added' | 'removed' | 'committed'> = {};
+
+  const startMs = sprintStart ? new Date(sprintStart).getTime() : NaN;
+
+  function containsSprintId(text?: string): boolean {
+    if (!text) return false;
+    // Cloud "toString" often contains the sprint id like "...[id=123]..."
+    const m = text.match(/\bid\s*=\s*(\d+)\b/);
+    return !!(m && m[1] === String(sprintId));
+  }
+
+  for (const key of issueKeys) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`, {
+        headers: { Authorization: auth, Accept: 'application/json' },
+      });
+      if (!resp.ok) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const data = (await resp.json()) as {
+        changelog?: {
+          histories?: Array<{
+            created?: string;
+            items?: Array<{ field?: string; fromString?: string; toString?: string }>;
+          }>;
+        };
+      };
+
+      let addedAfterStart = false;
+      let wasInAtStart = false;
+
+      for (const h of (data.changelog?.histories ?? [])) {
+        const when = h.created ? new Date(h.created).getTime() : NaN;
+        for (const ch of (h.items ?? [])) {
+          if (ch.field !== 'Sprint') continue;
+          const toHas = containsSprintId(ch.toString);
+          const fromHas = containsSprintId(ch.fromString);
+
+          if (!fromHas && toHas) {
+            if (Number.isFinite(startMs) && Number.isFinite(when) && when > startMs) addedAfterStart = true;
+            else wasInAtStart = true;
+          }
+          if (fromHas && !toHas) {
+            // left sprint; if left before/at start, mark as was in at start
+            if (!(Number.isFinite(startMs) && Number.isFinite(when) && when > startMs)) {
+              wasInAtStart = true;
+            }
+          }
+        }
+      }
+
+      if (addedAfterStart) result[key] = 'added';
+      else if (wasInAtStart) result[key] = 'committed';
+      else result[key] = 'committed'; // conservative default
+    } catch {
+      // ignore per-issue failures
+    }
+  }
+
+  return result;
+}
+
+/** First time each issue reached a target status name (case-insensitive). */
+export async function getIssueFirstReachedStatusDates(
+  issueKeys: string[],
+  targets: { dev: string[]; complete: string[] }
+): Promise<Record<string, { dev?: string; complete?: string }>> {
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+
+  const norm = (s?: string) => (s ?? '').trim().toLowerCase();
+  const devSet = new Set(targets.dev.map(norm));
+  const completeSet = new Set(targets.complete.map(norm));
+
+  const out: Record<string, { dev?: string; complete?: string }> = {};
+
+  for (const key of issueKeys) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`, {
+        headers: { Authorization: auth, Accept: 'application/json' },
+      });
+      if (!resp.ok) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const data = await resp.json() as {
+        changelog?: { histories?: Array<{ created?: string; items?: Array<{ field?: string; toString?: string }> }> };
+      };
+
+      let devFirst: string | undefined;
+      let completeFirst: string | undefined;
+
+      for (const h of (data.changelog?.histories ?? [])) {
+        const when = h.created;
+        for (const it of (h.items ?? [])) {
+          if (it.field !== 'status' || !it.toString) continue;
+          const to = norm(it.toString);
+          if (!devFirst && devSet.has(to)) devFirst = when;
+          if (!completeFirst && completeSet.has(to)) completeFirst = when;
+        }
+      }
+      if (devFirst || completeFirst) out[key] = { dev: devFirst, complete: completeFirst };
+    } catch {
+      // ignore one-off failures
+    }
+  }
+  return out;
+}
