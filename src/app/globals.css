@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
-:root {
+@import "tailwindcss";
+
+/* ===== Base tokens (defaults to dark) ===== */
+:root,
+[data-theme='dark'] {
+  /* App chrome */
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  /* Surfaces / nav */
+  --surface: #0b0b0b;
+  --surface-border: #1f2937;
+  --surface-link: #e5e7eb;
+
+  /* Cards */
+  --card-bg: #0f172a;
+  --card-fg: #e5e7eb;
+  --card-br: #1f2937;
+
+  /* Subtle text */
+  --faint-text: #cbd5e1;
+
+  /* Generic tokens used by controls */
+  --text: var(--foreground);
+  --muted: #94a3b8;
+  --surface-card: var(--surface);
+  --border: var(--surface-border);
+}
+
+/* ===== Light theme overrides ===== */
+[data-theme='light'] {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111827;
+
+  --surface: #ffffff;
+  --surface-border: #e5e7eb;
+  --surface-link: #111827;
+
+  --card-bg: #ffffff;
+  --card-fg: #111827;
+  --card-br: #e5e7eb;
+
+  --faint-text: #64748b;
+
+  --text: var(--foreground);
+  --muted: #64748b;
+  --surface-card: var(--surface);
+  --border: var(--surface-border);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* App base */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Small utilities */
+.select-reset {
+  appearance: none;
+  background: var(--surface);
+  color: var(--surface-link);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 6px 26px 6px 10px;
+  font-size: 14px;
+}
+
+/* Tiny chevron for the theme dropdown */
+.select-wrapper { position: relative; }
+.select-wrapper::after {
+  content: "▾";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--surface-link);
+}
+
+/* Nav bar */
+.app-nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.app-nav a { color: var(--surface-link); text-decoration: none; }
+.app-nav .brand { font-weight: 700; }
+.app-nav .spacer { flex: 1; }
