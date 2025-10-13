@@ -1,5 +1,7 @@
 import { cfg } from './config';
-import type { JiraIssue, JiraUserLite, JiraProjectLite } from './types';
+import type { JiraIssue, JiraUserLite, JiraProjectLite, JiraIssue as JiraIssueModel, JiraSprintLite } from './types';
+
+/* ---------------- Existing search helpers ---------------- */
 
 interface JiraUser { accountId: string; displayName: string; emailAddress?: string }
 interface JiraStatus { name?: string }
@@ -66,13 +68,13 @@ async function runJQL(params: {
   return out;
 }
 
-/** Fetch Jira projects for the dropdown. Tries /project/search, falls back to /project. */
+/* ---------------- Projects (unchanged) ---------------- */
+
 export async function getJiraProjects(): Promise<JiraProjectLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
-  // Try the paginated search endpoint first
   const projects: JiraProjectLite[] = [];
   let startAt = 0;
   const maxResults = 100;
@@ -84,7 +86,6 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
     const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
 
     if (resp.ok) {
-      // Typical shape: { values: [{ key, name, ... }], total, startAt, maxResults, isLast }
       const data = await resp.json() as { values?: Array<{ key: string; name: string }>; isLast?: boolean; startAt?: number; maxResults?: number };
       const vals = data.values ?? [];
       projects.push(...vals.map(p => ({ key: p.key, name: p.name })));
@@ -93,7 +94,6 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
       continue;
     }
 
-    // Fallback to legacy list (no pagination)
     if (resp.status === 404 || resp.status === 400) {
       const resp2 = await fetch(`${base}/rest/api/3/project`, { headers: { Authorization: auth, Accept: 'application/json' } });
       if (!resp2.ok) return projects;
@@ -102,21 +102,21 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
       break;
     }
 
-    // Other error: degrade quietly
     return projects;
   }
 
-  // Sort by name for UX
   projects.sort((a, b) => a.name.localeCompare(b.name));
   return projects;
 }
 
+/* ---------------- Done issues (as before) ---------------- */
+
 export async function getJiraDoneIssues(params: {
-  assignee: string;           // human string (only used when no accountId)
+  assignee: string;
   from: string;
   to: string;
-  jiraAccountId?: string;     // precise assignee
-  projectKey?: string;        // NEW: filter by selected project key
+  jiraAccountId?: string;
+  projectKey?: string;
 }): Promise<JiraIssue[]> {
   const { assignee, from, to, jiraAccountId, projectKey } = params;
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
@@ -124,23 +124,18 @@ export async function getJiraDoneIssues(params: {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
-  // include 'status' so we can show it
   const fields: string[] = ['summary', 'assignee', 'resolutiondate', 'status', cfg.jiraStoryPointsField];
 
-  // Scope by selected projectKey if present, else optional env projects
   const envProjects = (process.env.JIRA_PROJECTS ?? '').split(',').map(s => s.trim()).filter(Boolean);
   const projectFilter = projectKey
-    ? `AND project = ${projectKey}` // keys have no spaces; names would need quotes
+    ? `AND project = ${projectKey}`
     : (envProjects.length ? `AND project in (${envProjects.join(',')})` : '');
 
-  // Exact assignee by accountId (correct syntax for Cloud)
   const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
 
-  // Issue Type
   const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
   const issueTypeFilter = issueTypes.length ? `AND issuetype in (${issueTypes.join(',')})` : '';
 
-  // 1) Status changed during window (broad, covers transitions)
   const jql1 = [
     `status CHANGED DURING ("${from}","${to}")`,
     projectFilter,
@@ -148,7 +143,6 @@ export async function getJiraDoneIssues(params: {
     issueTypeFilter,
   ].filter(Boolean).join(' ');
 
-  // 2) Updated during window (very common signal)
   const jql2 = [
     `updated >= "${from}" AND updated <= "${to}"`,
     projectFilter,
@@ -156,7 +150,6 @@ export async function getJiraDoneIssues(params: {
     issueTypeFilter,
   ].filter(Boolean).join(' AND ');
 
-  // 3) Created during window (fallback)
   const jql3 = [
     `created >= "${from}" AND created <= "${to}"`,
     projectFilter,
@@ -178,7 +171,6 @@ export async function getJiraDoneIssues(params: {
     const assigneeField = issue.fields.assignee;
     const assigneeName = assigneeField?.displayName ?? assigneeField?.emailAddress ?? '';
 
-    // If no exact accountId filter, keep a soft match on the assignee string
     if (!jiraAccountId) {
       const matches = assigneeName.toLowerCase().includes(assignee.toLowerCase());
       if (!matches) continue;
@@ -199,7 +191,8 @@ export async function getJiraDoneIssues(params: {
   return Array.from(byId.values());
 }
 
-/** List users (unchanged) */
+/* ---------------- Users (unchanged) ---------------- */
+
 export async function getJiraUsers(): Promise<JiraUserLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
   const base = normalizedBase();
@@ -247,23 +240,17 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
 
 /* ================== Agile API helpers (Sprints) ================== */
 
-import type { JiraIssue as JiraIssueModel, JiraSprintLite } from './types';
-
 interface JiraBoard { id: number; name: string; type?: string }
 
 interface JiraSprintValue {
   id: number;
   name: string;
-  state?: string;               // Jira returns "active" | "future" | "closed" (string union loosely)
+  state?: string;  // "active" | "future" | "closed"
   startDate?: string;
   endDate?: string;
 }
-interface JiraSprintsResp {
-  values?: JiraSprintValue[];
-  isLast?: boolean;
-}
+interface JiraSprintsResp { values?: JiraSprintValue[]; isLast?: boolean }
 
-// Shape of fields we read from Agile "issue" responses
 interface JiraAgileIssueFields {
   summary: string;
   assignee?: { displayName?: string };
@@ -271,7 +258,6 @@ interface JiraAgileIssueFields {
   issuetype?: { name?: string; subtask?: boolean };
   created?: string;
   parent?: { key?: string };
-  // dynamic bag for custom fields like story points & epic link
   [key: string]: unknown;
 }
 interface JiraAgileIssue {
@@ -281,17 +267,10 @@ interface JiraAgileIssue {
 }
 
 function jiraAuthHeader(): string {
-  return 'Basic ' + Buffer
-    .from(`${cfg.jiraEmail}:${cfg.jiraToken}`)
-    .toString('base64');
+  return 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 }
+function jiraBase(): string { return normalizedBase(); }
 
-function jiraBase(): string {
-  // reuse your existing normalizedBase() from earlier in this file
-  return normalizedBase();
-}
-
-/** List sprints for a board (uses Agile API). */
 export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
   const base = jiraBase();
@@ -306,23 +285,19 @@ export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]>
     url.searchParams.set('startAt', String(startAt));
     url.searchParams.set('maxResults', String(maxRes));
 
-    const resp = await fetch(url.toString(), {
-      headers: { Authorization: auth, Accept: 'application/json' }
-    });
+    const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
     if (!resp.ok) break;
 
     const data = (await resp.json()) as JiraSprintsResp;
     const vals = data.values ?? [];
 
-    out.push(
-      ...vals.map((v): JiraSprintLite => ({
-        id: v.id,
-        name: v.name,
-        state: v.state ?? 'unknown',
-        startDate: v.startDate,
-        endDate: v.endDate,
-      }))
-    );
+    out.push(...vals.map(v => ({
+      id: v.id,
+      name: v.name,
+      state: v.state ?? 'unknown',
+      startDate: v.startDate,
+      endDate: v.endDate,
+    })));
 
     if (vals.length < maxRes || data.isLast) break;
     startAt += maxRes;
@@ -331,7 +306,6 @@ export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]>
   return out;
 }
 
-/** Get sprint meta (start/end/state/name). */
 export async function getJiraSprintMeta(
   sprintId: number
 ): Promise<{ id: number; name: string; state?: string; startDate?: string; endDate?: string } | null> {
@@ -339,18 +313,13 @@ export async function getJiraSprintMeta(
   const base = jiraBase();
   const auth = jiraAuthHeader();
 
-  const resp = await fetch(`${base}/rest/agile/1.0/sprint/${sprintId}`, {
-    headers: { Authorization: auth, Accept: 'application/json' }
-  });
+  const resp = await fetch(`${base}/rest/agile/1.0/sprint/${sprintId}`, { headers: { Authorization: auth, Accept: 'application/json' } });
   if (!resp.ok) return null;
 
-  const d = (await resp.json()) as {
-    id: number; name: string; state?: string; startDate?: string; endDate?: string;
-  };
+  const d = (await resp.json()) as { id: number; name: string; state?: string; startDate?: string; endDate?: string };
   return { id: d.id, name: d.name, state: d.state, startDate: d.startDate, endDate: d.endDate };
 }
 
-/** Issues currently in a sprint. Normalizes to your JiraIssue shape and filters to Story/Bug/Task/Spike. */
 export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueModel[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
   const base = jiraBase();
@@ -364,8 +333,8 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     'created',
     'parent',
     cfg.jiraStoryPointsField,
-    'customfield_10014',      // Epic Link (common default key on Cloud)
-    'resolutiondate'
+    'customfield_10014', // Epic Link
+    'resolutiondate',
   ];
   const allowed = new Set(['story', 'bug', 'task', 'spike']);
 
@@ -379,9 +348,7 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     url.searchParams.set('maxResults', String(maxRes));
     url.searchParams.set('fields', fields.join(','));
 
-    const resp = await fetch(url.toString(), {
-      headers: { Authorization: auth, Accept: 'application/json' }
-    });
+    const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
     if (!resp.ok) break;
 
     const data = (await resp.json()) as { issues?: JiraAgileIssue[] };
@@ -401,12 +368,12 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
         summary: it.fields.summary,
         assignee: it.fields.assignee?.displayName,
         status: it.fields.status?.name,
-        created: it.fields.created,               // now typed on JiraIssue
+        created: it.fields.created,
         storyPoints,
         url: `${base}/browse/${it.key}`,
-        issueType: it.fields.issuetype?.name,     // now typed on JiraIssue
-        parentKey: it.fields.parent?.key,         // now typed on JiraIssue
-        epicKey,                                  // now typed on JiraIssue
+        issueType: it.fields.issuetype?.name,
+        parentKey: it.fields.parent?.key,
+        epicKey,
         resolutiondate: it.fields.resolutiondate as (string | undefined),
       });
     }
@@ -418,7 +385,8 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
   return out;
 }
 
-/** Determine scope changes by inspecting changelogs for "Sprint" field transitions. */
+/* ---------- Scope changes (unchanged from your last baseline) ---------- */
+
 export async function getJiraSprintScopeChanges(
   sprintId: number,
   issueKeys: string[],
@@ -432,7 +400,6 @@ export async function getJiraSprintScopeChanges(
 
   function containsSprintId(text?: string): boolean {
     if (!text) return false;
-    // Cloud "toString" often contains the sprint id like "...[id=123]..."
     const m = text.match(/\bid\s*=\s*(\d+)\b/);
     return !!(m && m[1] === String(sprintId));
   }
@@ -469,7 +436,6 @@ export async function getJiraSprintScopeChanges(
             else wasInAtStart = true;
           }
           if (fromHas && !toHas) {
-            // left sprint; if left before/at start, mark as was in at start
             if (!(Number.isFinite(startMs) && Number.isFinite(when) && when > startMs)) {
               wasInAtStart = true;
             }
@@ -479,7 +445,7 @@ export async function getJiraSprintScopeChanges(
 
       if (addedAfterStart) result[key] = 'added';
       else if (wasInAtStart) result[key] = 'committed';
-      else result[key] = 'committed'; // conservative default
+      else result[key] = 'committed';
     } catch {
       // ignore per-issue failures
     }
@@ -488,33 +454,39 @@ export async function getJiraSprintScopeChanges(
   return result;
 }
 
-/** First time each issue reached a target status name (case-insensitive). */
-export async function getIssueFirstReachedStatusDates(
+/* ---------- NEW: Phase timestamps from changelog ---------- */
+
+export async function getIssuePhaseTimes(
   issueKeys: string[],
-  targets: { dev: string[]; complete: string[] }
-): Promise<Record<string, { dev?: string; complete?: string }>> {
+  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[] }
+): Promise<Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string }>> {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
-  const devSet = new Set(targets.dev.map(norm));
-  const completeSet = new Set(targets.complete.map(norm));
+  const todoSet = new Set(stages.todo.map(norm));
+  const inProgSet = new Set(stages.inProgress.map(norm));
+  const reviewSet = new Set(stages.review.map(norm));
+  const completeSet = new Set(stages.complete.map(norm));
 
-  const out: Record<string, { dev?: string; complete?: string }> = {};
+  const out: Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string }> = {};
 
   for (const key of issueKeys) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`, {
+      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=created,status`, {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
       if (!resp.ok) continue;
       // eslint-disable-next-line no-await-in-loop
       const data = await resp.json() as {
+        fields?: { created?: string; status?: { name?: string } };
         changelog?: { histories?: Array<{ created?: string; items?: Array<{ field?: string; toString?: string }> }> };
       };
 
-      let devFirst: string | undefined;
+      let todoFirst: string | undefined = data.fields?.created; // fallback to created if no explicit "To Do"
+      let inProgFirst: string | undefined;
+      let reviewFirst: string | undefined;
       let completeFirst: string | undefined;
 
       for (const h of (data.changelog?.histories ?? [])) {
@@ -522,11 +494,14 @@ export async function getIssueFirstReachedStatusDates(
         for (const it of (h.items ?? [])) {
           if (it.field !== 'status' || !it.toString) continue;
           const to = norm(it.toString);
-          if (!devFirst && devSet.has(to)) devFirst = when;
+          if (!inProgFirst && inProgSet.has(to)) inProgFirst = when;
+          if (!reviewFirst && reviewSet.has(to)) reviewFirst = when;
           if (!completeFirst && completeSet.has(to)) completeFirst = when;
+          if (!todoFirst && todoSet.has(to)) todoFirst = when;
         }
       }
-      if (devFirst || completeFirst) out[key] = { dev: devFirst, complete: completeFirst };
+
+      out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst };
     } catch {
       // ignore one-off failures
     }

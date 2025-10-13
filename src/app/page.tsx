@@ -135,7 +135,7 @@ export default function Page(): JSX.Element {
   }, [data]);
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+    <div style={{ width: '100%', padding: '24px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Developer Performance Dashboard</h1>
       </header>
