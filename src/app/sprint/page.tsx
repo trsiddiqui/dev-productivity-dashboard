@@ -20,11 +20,9 @@ import {
   Legend,
 } from 'recharts';
 
-/** ↓ Change this to 0 to NEVER use compact mode, or tweak the width you prefer */
 const COMPACT_SWITCH_PX = 480;
 
 /* ===================== Palette / helpers ===================== */
-
 const palette = {
   // stages
   todo:    '#94a3b8',
@@ -110,14 +108,14 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
   if (!Number.isFinite(d.getTime())) return { date: '—', timeTz: '' };
 
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Dawson',
+    timeZone: 'America/Chicago', // ✅ Central Time
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZoneName: 'short', // CST/CDT automatically
+    timeZoneName: 'short',
   }).formatToParts(d);
 
   const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
@@ -132,7 +130,6 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
 }
 
 /* ===================== Small shared UI ===================== */
-
 function Num({ v }: { v: number | undefined }): JSX.Element {
   const n = Number.isFinite(v) ? (v as number) : 0;
   return <span>{n.toLocaleString()}</span>;
@@ -166,7 +163,6 @@ function Pill({
 }
 
 /* ===================== Main Page ===================== */
-
 export default function SprintPage(): JSX.Element {
   // Controls
   const [boardId, setBoardId] = useState<string>('');
@@ -257,8 +253,8 @@ export default function SprintPage(): JSX.Element {
     }
     for (const [k, arr] of m.entries()) {
       arr.sort((a, b) => {
-        const aKey = (a as any).reviewAt ?? (a as any).completeAt ?? a.created ?? '';
-        const bKey = (b as any).reviewAt ?? (b as any).completeAt ?? b.created ?? '';
+        const aKey = a.reviewAt ?? a.completeAt ?? a.created ?? '';
+        const bKey = b.reviewAt ?? b.completeAt ?? b.created ?? '';
         return aKey.localeCompare(bKey);
       });
       m.set(k, arr);
@@ -286,7 +282,6 @@ export default function SprintPage(): JSX.Element {
     ];
   }, [data]);
 
-  // ---- Effects ----
   useEffect(() => {
     if (boardId) void loadSprints(boardId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -349,6 +344,7 @@ export default function SprintPage(): JSX.Element {
             items={sprintOptions}
             value={sprintId}
             onChange={setSprintId}
+            style={{ backgroundColor: 'black' }}
             placeholder={loadingSprints ? 'Loading sprints…' : 'Search sprint…'}
             disabled={loadingSprints || sprintOptions.length === 0}
           />
@@ -505,7 +501,6 @@ export default function SprintPage(): JSX.Element {
 }
 
 /* ===================== Ticket Timeline UI ===================== */
-
 function Dot({ color, active }: { color: string; active: boolean }) {
   return (
     <div
@@ -571,7 +566,6 @@ function Step({
       {compact ? (
         <>
           <div style={{ fontSize: 14, marginTop: 6, color, textAlign: 'center' }}>{icon}</div>
-          {/* Always show timestamps even in compact mode */}
           <div style={{ fontSize: 10, color: palette.faint, textAlign: 'center', lineHeight: 1.15, marginTop: 2 }}>
             <div>{parts.date}</div>
             <div>{parts.timeTz}</div>
@@ -591,17 +585,17 @@ function Step({
 }
 
 function TicketTimeline({ issue }: { issue: JiraIssue }) {
-  const hasProg    = !!(issue as any).inProgressAt;
-  const hasReview  = !!(issue as any).reviewAt;
-  const hasDone    = !!(issue as any).completeAt;
+  const hasProg   = !!issue.inProgressAt;
+  const hasReview = !!issue.reviewAt;
+  const hasDone   = !!issue.completeAt;
 
   const typeSty = typeColor(issue.issueType);
   const statSty = statusColor(issue.status);
 
-  const todoAt = (issue as any).todoAt ?? issue.created;
-  const inProg = (issue as any).inProgressAt;
-  const revAt  = (issue as any).reviewAt;
-  const compAt = (issue as any).completeAt;
+  const todoAt = issue.todoAt ?? issue.created;
+  const inProg = issue.inProgressAt;
+  const revAt  = issue.reviewAt;
+  const compAt = issue.completeAt;
 
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(false);
@@ -640,7 +634,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         </div>
       </div>
 
-      {/* timeline (no scrollbar; auto-compact) */}
+      {/* timeline */}
       <div
         ref={rowRef}
         style={{
@@ -665,13 +659,13 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         <Pill bg="rgba(59,130,246,0.18)" br="rgba(59,130,246,0.45)">
           In Progress → Review:
           <span style={{ fontWeight: 700, marginLeft: 4 }}>
-            <Hrs v={(issue as any).inProgressToReviewHours} />
+            <Hrs v={issue.inProgressToReviewHours} />
           </span>
         </Pill>
         <Pill bg="rgba(139,92,246,0.18)" br="rgba(139,92,246,0.45)">
           Review → Approved:
           <span style={{ fontWeight: 700, marginLeft: 4 }}>
-            <Hrs v={(issue as any).reviewToCompleteHours} />
+            <Hrs v={issue.reviewToCompleteHours} />
           </span>
         </Pill>
       </div>

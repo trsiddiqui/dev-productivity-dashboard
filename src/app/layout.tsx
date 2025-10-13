@@ -15,6 +15,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+        <head>
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+          (function() {
+            function setTheme(newTheme) {             document.documentElement.setAttribute('data-theme', newTheme);
+            }               
+          }}
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <nav className="app-nav">
           <div className="brand">Dev Productivity Dashboard</div>
