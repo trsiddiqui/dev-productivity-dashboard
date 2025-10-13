@@ -121,7 +121,7 @@ export function SearchableSelect({
           padding: '8px 10px',
           borderRadius: 8,
           border: '1px solid #ddd',
-          background: disabled ? '#f6f6f6' : 'white'
+          background: disabled ? 'grey' : 'black'
         }}
       />
 
@@ -162,7 +162,7 @@ export function SearchableSelect({
                     alignItems: 'center',
                     padding: '8px 10px',
                     borderRadius: 8,
-                    background: active ? '#f1f5f9' : 'transparent',
+                    background: active ? 'grey' : 'transparent',
                     cursor: 'pointer'
                   }}
                 >
