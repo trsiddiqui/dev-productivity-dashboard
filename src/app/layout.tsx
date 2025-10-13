@@ -19,10 +19,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <script
       dangerouslySetInnerHTML={{
         __html: `
-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-          (function() {
-            function setTheme(newTheme) {             document.documentElement.setAttribute('data-theme', newTheme);
-            }               
+            (function(){
+              try{
+                var t = localStorage.getItem('theme');
+                if(t === 'light' || t === 'dark'){
+                  document.documentElement.setAttribute('data-theme', t);
+                }
+              }catch(e){}
+            })();`,
           }}
         />
       </head>
