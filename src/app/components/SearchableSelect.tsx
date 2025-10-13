@@ -16,6 +16,7 @@ interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   emptyHint?: string;
+  style?: React.CSSProperties; // NEW
 }
 
 export function SearchableSelect({
@@ -25,6 +26,7 @@ export function SearchableSelect({
   placeholder = 'Search…',
   disabled = false,
   emptyHint = 'No matches',
+  style, // NEW
 }: SearchableSelectProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
@@ -102,7 +104,7 @@ export function SearchableSelect({
   }, [highlight, open]);
 
   return (
-    <div ref={rootRef} style={{ position: 'relative' }}>
+    <div ref={rootRef} style={{ position: 'relative', ...(style || {}) }}>
       <input
         id={`searchable-${id}`}
         type="text"

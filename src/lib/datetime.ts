@@ -1,5 +1,5 @@
 // src/lib/datetime.ts
-export const CENTRAL_TZ = "America/Dawson";
+export const CENTRAL_TZ = "America/Chicago";
 
 type FmtOpts = { withSeconds?: boolean };
 
@@ -19,7 +19,7 @@ export function formatTimeZone(input: Date | string | number, opts: FmtOpts = {}
     minute: "2-digit",
     ...(withSeconds ? { second: "2-digit" } : {}),
     hour12: true,
-    timeZoneName: "short", // CST/CDT automatically
+    timeZoneName: "short",
   }).format(d);
 }
 

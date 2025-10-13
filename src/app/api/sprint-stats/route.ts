@@ -26,7 +26,7 @@ const COMPLETE_STATUS_NAMES = ['Approved', 'Done'];
 const REVIEW_SET = new Set(DEV_STATUS_NAMES.map((s) => s.toLowerCase()));
 
 /** Helpers */
-const toDateOnly = (iso?: string): string | undefined => iso ? iso.slice(0, 10) : undefined;
+const toDateOnly = (iso?: string): string | undefined => (iso ? iso.slice(0, 10) : undefined);
 const dayKey = (d: Date): string => formatISO(d, { representation: 'date' });
 const diffHours = (a?: string, b?: string): number | null => {
   if (!a || !b) return null;
@@ -204,8 +204,8 @@ export async function GET(req: Request) {
           let cur = histDev[histDev.length - 1] ?? 0;
           for (let i = todayIdx + 1; i < burn.length; i += 1) {
             cur = Math.min(totalScope, cur + vDev);
-            (burn[i] as any).devForecastCompleted = cur;
-            (burn[i] as any).devForecastRemaining = Math.max(0, totalScope - cur);
+            burn[i].devForecastCompleted = cur;
+            burn[i].devForecastRemaining = Math.max(0, totalScope - cur);
           }
           const devRem = Math.max(0, totalScope - (histDev[histDev.length - 1] ?? 0));
           const daysNeeded = Math.ceil(devRem / vDev);
@@ -218,8 +218,8 @@ export async function GET(req: Request) {
           let cur = histComp[histComp.length - 1] ?? 0;
           for (let i = todayIdx + 1; i < burn.length; i += 1) {
             cur = Math.min(totalScope, cur + vComp);
-            (burn[i] as any).completeForecastCompleted = cur;
-            (burn[i] as any).completeForecastRemaining = Math.max(0, totalScope - cur);
+            burn[i].completeForecastCompleted = cur;
+            burn[i].completeForecastRemaining = Math.max(0, totalScope - cur);
           }
           const compRem = Math.max(0, totalScope - (histComp[histComp.length - 1] ?? 0));
           const daysNeeded = Math.ceil(compRem / vComp);
