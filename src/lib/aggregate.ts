@@ -74,6 +74,11 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
       closedAt,
       state: p.state,
       isDraft: p.isDraft,
+
+      // carry LOC deltas into lifecycle rows
+      additions: p.additions,
+      deletions: p.deletions,
+
       timeToReadyHours: diffHours(p.createdAt, readyAt),
       timeToFirstReviewHours: diffHours(p.createdAt, firstRev),
       reviewToMergeHours: mergedAt ? diffHours(firstRev ?? readyAt ?? p.createdAt, mergedAt) : null,

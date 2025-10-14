@@ -1,5 +1,12 @@
 import { cfg } from './config';
-import type { JiraIssue, JiraUserLite, JiraProjectLite, JiraIssue as JiraIssueModel, JiraSprintLite } from './types';
+import type {
+  JiraIssue,
+  JiraUserLite,
+  JiraProjectLite,
+  JiraIssue as JiraIssueModel,
+  JiraSprintLite,
+  LinkedPR,
+} from './types';
 
 /* ---------------- Existing search helpers ---------------- */
 
@@ -10,6 +17,8 @@ interface JiraIssueFields {
   assignee?: JiraUser;
   resolutiondate?: string;
   status?: JiraStatus;
+  updated?: string;
+  created?: string;
   [key: string]: unknown;
 }
 interface JiraIssueRaw { id: string; key: string; fields: JiraIssueFields }
@@ -68,7 +77,7 @@ async function runJQL(params: {
   return out;
 }
 
-/* ---------------- Projects (unchanged) ---------------- */
+/* ---------------- Projects ---------------- */
 
 export async function getJiraProjects(): Promise<JiraProjectLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
@@ -191,7 +200,7 @@ export async function getJiraDoneIssues(params: {
   return Array.from(byId.values());
 }
 
-/* ---------------- Users (unchanged) ---------------- */
+/* ---------------- Users ---------------- */
 
 export async function getJiraUsers(): Promise<JiraUserLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
@@ -238,14 +247,14 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
   return out;
 }
 
-/* ================== Agile API helpers (Sprints) ================== */
+/* ================== Agile / Sprint helpers (unchanged below where used) ================== */
 
 interface JiraBoard { id: number; name: string; type?: string }
 
 interface JiraSprintValue {
   id: number;
   name: string;
-  state?: string;  // "active" | "future" | "closed"
+  state?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -385,7 +394,7 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
   return out;
 }
 
-/* ---------- Scope changes (unchanged from your last baseline) ---------- */
+/* ---------- Scope changes: unchanged ---------- */
 
 export async function getJiraSprintScopeChanges(
   sprintId: number,
@@ -402,16 +411,14 @@ export async function getJiraSprintScopeChanges(
     if (!text) return false;
     const m = text.match(/\bid\s*=\s*(\d+)\b/);
     return !!(m && m[1] === String(sprintId));
-  }
+    }
 
   for (const key of issueKeys) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`, {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
       if (!resp.ok) continue;
-      // eslint-disable-next-line no-await-in-loop
       const data = (await resp.json()) as {
         changelog?: {
           histories?: Array<{
@@ -454,7 +461,7 @@ export async function getJiraSprintScopeChanges(
   return result;
 }
 
-/* ---------- NEW: Phase timestamps from changelog ---------- */
+/* ---------- Phase timestamps from changelog ---------- */
 
 export async function getIssuePhaseTimes(
   issueKeys: string[],
@@ -473,18 +480,16 @@ export async function getIssuePhaseTimes(
 
   for (const key of issueKeys) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=created,status`, {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
       if (!resp.ok) continue;
-      // eslint-disable-next-line no-await-in-loop
       const data = await resp.json() as {
         fields?: { created?: string; status?: { name?: string } };
         changelog?: { histories?: Array<{ created?: string; items?: Array<{ field?: string; toString?: string }> }> };
       };
 
-      let todoFirst: string | undefined = data.fields?.created; // fallback to created if no explicit "To Do"
+      let todoFirst: string | undefined = data.fields?.created;
       let inProgFirst: string | undefined;
       let reviewFirst: string | undefined;
       let completeFirst: string | undefined;
@@ -507,4 +512,145 @@ export async function getIssuePhaseTimes(
     }
   }
   return out;
+}
+
+/* ---------- NEW: Dev-status PRs & subtasks ---------- */
+
+// Pull requests linked to an issueId (Jira Cloud dev-status)
+export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string, LinkedPR[]>> {
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+
+  type DevStatusPR = { url?: string; self?: string; name?: string; title?: string; id?: number | string };
+  type DevStatusDetail = { pullRequests?: DevStatusPR[] };
+  type DevStatusResponse = { detail?: DevStatusDetail[] };
+
+  const result: Record<string, LinkedPR[]> = {};
+  for (const id of issueIds) {
+    try {
+      const url = `${base}/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(id)}&applicationType=GitHub&dataType=pullrequest`;
+      const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+      if (!resp.ok) { result[id] = []; continue; }
+
+      const raw: unknown = await resp.json();
+      const data: DevStatusResponse = (raw && typeof raw === 'object') ? (raw as DevStatusResponse) : {};
+
+      const prs: LinkedPR[] = (data.detail ?? [])
+        .flatMap((d) => d.pullRequests ?? [])
+        .map((p) => {
+          const urlVal = p.url ?? p.self ?? '';
+          if (!urlVal) return null;
+          return {
+            url: urlVal,
+            title: p.name ?? p.title ?? undefined,
+            id: p.id !== undefined ? String(p.id) : undefined,
+            source: 'dev-status',
+          } as LinkedPR;
+        })
+        .filter((x): x is LinkedPR => !!x);
+
+      result[id] = prs;
+    } catch {
+      result[id] = [];
+    }
+  }
+  return result;
+}
+
+// Map parent key -> subtask issue IDs
+export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<string, string[]>> {
+  if (parentKeys.length === 0) return {};
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+
+  const jql = `parent in (${parentKeys.map(k => `"${k}"`).join(',')})`;
+  const issues = await runJQL({ jql, fields: ['parent'], auth, base }).catch(() => [] as JiraIssueRaw[]);
+
+  type IssueWithParent = JiraIssueRaw & { fields: JiraIssueFields & { parent?: { key?: string } } };
+
+  const map: Record<string, string[]> = {};
+  for (const it of issues as IssueWithParent[]) {
+    const parent = it.fields?.parent?.key ?? '';
+    if (!parent) continue;
+    if (!map[parent]) map[parent] = [];
+    map[parent].push(it.id);
+  }
+  return map;
+}
+
+/* ---------------- NEW: Issues updated in window for a given assignee ---------------- */
+
+export async function getJiraIssuesUpdated(params: {
+  assignee: string;
+  from: string;    // YYYY-MM-DD
+  to: string;      // YYYY-MM-DD
+  jiraAccountId?: string;
+  projectKey?: string;
+}): Promise<JiraIssue[]> {
+  const { assignee, from, to, jiraAccountId, projectKey } = params;
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+
+  const fields: string[] = [
+    'summary',
+    'assignee',
+    'status',
+    'updated',
+    'created',
+    'resolutiondate',
+    cfg.jiraStoryPointsField,
+  ];
+
+  const envProjects = (process.env.JIRA_PROJECTS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const projectFilter = projectKey
+    ? `AND project = ${projectKey}`
+    : (envProjects.length ? `AND project in (${envProjects.join(',')})` : '');
+
+  // Prefer exact accountId if provided; otherwise we’ll filter by assignee display name later.
+  const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
+
+  const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
+  const issueTypeFilter = issueTypes.length ? `AND issuetype in (${issueTypes.join(',')})` : '';
+
+  const jql = [
+    `updated >= "${from}" AND updated <= "${to}"`,
+    projectFilter,
+    assigneeExact,
+    issueTypeFilter,
+  ].filter(Boolean).join(' ');
+
+  const raw = await runJQL({ jql, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+
+  const byId = new Map<string, JiraIssue>();
+  for (const issue of raw) {
+    const spUnknown = issue.fields[cfg.jiraStoryPointsField];
+    const storyPoints = typeof spUnknown === 'number' ? spUnknown : undefined;
+
+    const assigneeField = issue.fields.assignee;
+    const assigneeName = assigneeField?.displayName ?? assigneeField?.emailAddress ?? '';
+
+    // If no accountId filter available, best-effort match on displayName/email
+    if (!jiraAccountId) {
+      const matches = assigneeName.toLowerCase().includes(assignee.toLowerCase());
+      if (!matches) continue;
+    }
+
+    byId.set(issue.id, {
+      id: issue.id,
+      key: issue.key,
+      summary: issue.fields.summary,
+      assignee: assigneeField?.displayName,
+      status: issue.fields.status?.name ?? undefined,
+      storyPoints,
+      url: `${base}/browse/${issue.key}`,
+      // dates carried through for UI/aggregation
+      updated: issue.fields.updated,
+      created: issue.fields.created,
+      resolutiondate: issue.fields.resolutiondate,
+    });
+  }
+
+  return Array.from(byId.values());
 }
