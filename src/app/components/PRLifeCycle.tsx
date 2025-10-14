@@ -6,9 +6,42 @@ import { JSX } from 'react';
 
 function Hrs({ v }: { v?: number | null }): JSX.Element {
   if (v === null || v === undefined) return <span>—</span>;
-  // show hours (rounded 1 decimal); show days if > 48h for readability
   if (v >= 48) return <span>{(v / 24).toFixed(1)}d</span>;
   return <span>{v.toFixed(1)}h</span>;
+}
+
+/* number formatting, right-aligned */
+function Num({ v }: { v?: number | null }): JSX.Element {
+  if (v === null || v === undefined) return <span>0</span>;
+  const n = Number.isFinite(v) ? (v as number) : 0;
+  return <span>{n.toLocaleString()}</span>;
+}
+
+/* date + time on two lines in LOCAL timezone */
+function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
+  if (!iso) return <span>—</span>;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return <span>—</span>;
+
+  const date = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }).format(d);
+
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZoneName: 'short',
+  }).format(d);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, textAlign: 'right', whiteSpace: 'nowrap' }}>
+      <span>{date}</span>
+      <span style={{ fontSize: 12, color: '#94a3b8' }}>{time}</span>
+    </div>
+  );
 }
 
 export function PRLifecycleView({
@@ -18,6 +51,25 @@ export function PRLifecycleView({
   items: PRLifecycle[];
   stats: LifecycleStats;
 }): JSX.Element {
+  /* cell styles with vertical separators */
+  const thBase: React.CSSProperties = {
+    padding: '10px 12px',
+    borderRight: '1px solid #1f2937',
+    background: '#0b0b0b',
+    color: '#e5e7eb',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+  };
+  const thLeft: React.CSSProperties = { ...thBase, textAlign: 'left' };
+  const thRight: React.CSSProperties = { ...thBase, textAlign: 'right' };
+
+  const tdStyle: React.CSSProperties = {
+    padding: '10px 12px',
+    borderRight: '1px solid #1f2937',
+    verticalAlign: 'top',
+  };
+
   return (
     <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
       <h2 style={{ fontWeight: 600, marginBottom: 12 }}>PR Lifecycle</h2>
@@ -32,32 +84,57 @@ export function PRLifecycleView({
 
       {/* Table */}
       <div style={{ overflow: 'auto' }}>
-        <table style={{ width: '100%', fontSize: 14 }}>
+        <table style={{ width: '100%', fontSize: 14, borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #1f2937' }}>
-              <th style={{ padding: '8px 0' }}>PR</th>
-              <th>Created</th>
-              <th>Ready</th>
-              <th>First Review</th>
-              <th>Merged</th>
-              <th>Closed</th>
-              <th>Status</th>
-              <th>→ Ready</th>
-              <th>→ First Review</th>
-              <th>Review → Merge</th>
-              <th>Cycle</th>
+            <tr style={{ borderBottom: '1px solid #1f2937' }}>
+              <th style={thLeft}>PR</th>
+              <th style={thRight}>Additions</th>
+              <th style={thRight}>Deletions</th>
+              <th style={thRight}>Created</th>
+              <th style={thRight}>Ready</th>
+              <th style={thRight}>First Review</th>
+              <th style={thRight}>Merged</th>
+              <th style={thRight}>Closed</th>
+              <th style={thLeft}>Status</th>
+              <th style={thLeft}>→ Ready</th>
+              <th style={thLeft}>→ First Review</th>
+              <th style={thLeft}>Review → Merge</th>
+              <th style={{ ...thLeft, borderRight: 'none' }}>Cycle</th>
             </tr>
           </thead>
           <tbody>
             {items.map(i => (
               <tr key={i.id} style={{ borderBottom: '1px solid #111827' }}>
-                <td><a href={i.url} target="_blank" rel="noreferrer">#{i.number} {i.title}</a></td>
-                <td>{i.createdAt?.slice(0, 10)}</td>
-                <td>{i.readyForReviewAt?.slice(0, 10) ?? '—'}</td>
-                <td>{i.firstReviewAt?.slice(0, 10) ?? '—'}</td>
-                <td>{i.mergedAt?.slice(0, 10) ?? '—'}</td>
-                <td>{i.closedAt?.slice(0, 10) ?? '—'}</td>
-                <td>
+                <td style={tdStyle}>
+                  <a href={i.url} target="_blank" rel="noreferrer">
+                    #{i.number} {i.title}
+                  </a>
+                </td>
+
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <Num v={i.additions} />
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <Num v={i.deletions} />
+                </td>
+
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.createdAt} />
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.readyForReviewAt ?? null} />
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.firstReviewAt ?? null} />
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.mergedAt ?? null} />
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.closedAt ?? null} />
+                </td>
+
+                <td style={tdStyle}>
                   {i.state === 'MERGED' ? (
                     <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: 999, fontSize: 12 }}>
                       Merged
@@ -76,10 +153,11 @@ export function PRLifecycleView({
                     </span>
                   )}
                 </td>
-                <td><Hrs v={i.timeToReadyHours} /></td>
-                <td><Hrs v={i.timeToFirstReviewHours} /></td>
-                <td><Hrs v={i.reviewToMergeHours} /></td>
-                <td><Hrs v={i.cycleTimeHours} /></td>
+
+                <td style={tdStyle}><Hrs v={i.timeToReadyHours} /></td>
+                <td style={tdStyle}><Hrs v={i.timeToFirstReviewHours} /></td>
+                <td style={tdStyle}><Hrs v={i.reviewToMergeHours} /></td>
+                <td style={{ ...tdStyle, borderRight: 'none' }}><Hrs v={i.cycleTimeHours} /></td>
               </tr>
             ))}
           </tbody>

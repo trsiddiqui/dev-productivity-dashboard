@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getGithubPRsWithStats } from '../../../lib/github';
-import { getJiraDoneIssues } from '../../../lib/jira';
-import { aggregateDaily } from '../../../lib/aggregate';
+import { getJiraIssuesUpdated } from '../../../lib/jira';
+import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
 import type { StatsResponse, KPIs, JiraIssue, PR } from '../../../lib/types';
-import { computeLifecycle } from '../../../lib/aggregate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,34 +21,37 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Missing required params: login, from, to' }, { status: 400 });
     }
 
+    // GitHub PRs (created within date window)
     const prs = await getGithubPRsWithStats({ login, from, to });
 
+    // Jira issues: ALL assigned to the user AND updated within [from..to]
     let jiraIssues: JiraIssue[] = [];
     try {
-      jiraIssues = await getJiraDoneIssues({ assignee: login, from, to, jiraAccountId, projectKey });
+      jiraIssues = await getJiraIssuesUpdated({ assignee: login, from, to, jiraAccountId, projectKey });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       warnings.push(`JIRA fetch skipped: ${msg}`);
       jiraIssues = [];
     }
 
+    // Link PRs to jira keys by title best-effort
     const jiraKeys = new Set<string>(jiraIssues.map(i => i.key));
     const prsLinked: PR[] = prs.map(pr => ({
       ...pr,
       jiraKeys: [...jiraKeys].filter(k => pr.title.includes(k)),
     }));
 
+    // KPIs: now reflect UPDATED issues in the window
     const kpis: KPIs = {
       totalPRs: prsLinked.length,
-      totalTicketsDone: jiraIssues.length,
+      totalTicketsDone: jiraIssues.length,    // "Tickets" now = tickets updated in window
       totalStoryPoints: jiraIssues.reduce<number>((a, i) => a + (i.storyPoints ?? 0), 0),
       totalAdditions: prsLinked.reduce<number>((a, p) => a + (p.additions ?? 0), 0),
       totalDeletions: prsLinked.reduce<number>((a, p) => a + (p.deletions ?? 0), 0),
     };
 
+    // Timeseries buckets tickets by UPDATED date (falls back to resolutiondate if missing)
     const timeseries = aggregateDaily({ from, to, prs: prsLinked, jiraIssues });
-
-
 
     const lifecycle = computeLifecycle(prsLinked);
 
@@ -60,7 +62,7 @@ export async function GET(req: Request) {
       prs: prsLinked,
       tickets: jiraIssues,
       warnings: warnings.length ? warnings : undefined,
-      lifecycle, // <-- NEW
+      lifecycle,
     };
 
     return NextResponse.json(payload);

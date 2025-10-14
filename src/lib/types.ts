@@ -35,6 +35,7 @@ export interface JiraIssue {
 
   // used by sprint helpers / UI
   created?: string;
+  updated?: string;     // ✅ added for /api/stats “updated in window”
   issueType?: string;
   parentKey?: string;
   epicKey?: string;
@@ -81,6 +82,10 @@ export interface PRLifecycle {
   closedAt?: string | null;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
+
+  // LOC deltas
+  additions?: number;
+  deletions?: number;
 
   // computed (hours)
   timeToReadyHours?: number | null;
@@ -218,4 +223,12 @@ export interface JiraProjectLite {
 export interface ProjectsResponse {
   projects: JiraProjectLite[];
   warnings?: string[];
+}
+
+/* --------- Linked PRs surfaced by Jira dev-status --------- */
+export interface LinkedPR {
+  id?: string;
+  url: string;
+  title?: string;
+  source?: 'dev-status' | string;
 }
