@@ -22,12 +22,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Status name groups */
-const TODO_STATUS_NAMES = ['To Do', 'Open', 'Backlog', 'Selected for Development'];
-const INPROGRESS_STATUS_NAMES = ['In Progress', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'];
-const DEV_STATUS_NAMES = ['Reviewed', 'Review', 'In Review'];
-const COMPLETE_STATUS_NAMES = ['Approved', 'Done'];
+const TODO_STATUS_NAMES = ['To Do', 'Impeded', 'Open', 'Backlog', 'Selected for Development'];
+const INPROGRESS_STATUS_NAMES = ['In Progress', 'Merged', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'];
+const QA_STATUS_NAMES = ['Reviewed', 'Review', 'In Review'];
+const COMPLETE_STATUS_NAMES = ['Done', 'Approved'];
 
-const REVIEW_SET = new Set(DEV_STATUS_NAMES.map((s) => s.toLowerCase()));
+const REVIEW_SET = new Set(QA_STATUS_NAMES.map((s) => s.toLowerCase()));
 
 /** Helpers */
 const toDateOnly = (iso?: string): string | undefined => (iso ? iso.slice(0, 10) : undefined);
@@ -73,7 +73,7 @@ export async function GET(req: Request) {
     // Phase timestamps via changelog (To Do / In Progress / Review / Approved)
     const phaseTimes = await getIssuePhaseTimes(
       issues.map((i) => i.key),
-      { todo: TODO_STATUS_NAMES, inProgress: INPROGRESS_STATUS_NAMES, review: DEV_STATUS_NAMES, complete: COMPLETE_STATUS_NAMES }
+      { todo: TODO_STATUS_NAMES, inProgress: INPROGRESS_STATUS_NAMES, review: QA_STATUS_NAMES, complete: COMPLETE_STATUS_NAMES }
     );
 
     // Merge phase times + durations into issues
