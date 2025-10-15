@@ -4,13 +4,17 @@ import {
   getJiraSprintIssues,
   getJiraSprintScopeChanges,
   getIssuePhaseTimes,
+  getJiraIssuePRs,
+  getJiraSubtaskIds,
 } from '../../../lib/jira';
+import { getGithubPRStatsByUrls } from '../../../lib/github';
 import type {
   SprintStatsResponse,
   JiraIssue,
   SprintBurnItem,
   SprintKPI,
   CompletedByAssignee,
+  LinkedPR,
 } from '../../../lib/types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 
@@ -81,6 +85,69 @@ export async function GET(req: Request) {
       it.completeAt = p.complete;
       it.inProgressToReviewHours = diffHours(p.inProgress, p.review);
       it.reviewToCompleteHours = diffHours(p.review, p.complete);
+    }
+
+    // === NEW: Dev-status PR aggregation (parent + subtasks) ===
+    try {
+      const parents = issues.filter(
+        i => ['story', 'bug', 'task'].includes((i.issueType ?? '').toLowerCase())
+      );
+
+      const parentKeyToIssue = new Map<string, JiraIssue>();
+      parents.forEach(p => parentKeyToIssue.set(p.key, p));
+
+      // 1) subtask id lookup for parents
+      const subtaskIdsByParentKey = await getJiraSubtaskIds(parents.map(p => p.key)).catch(() => ({} as Record<string, string[]>));
+
+      // 2) collect all issueIds to pull PRs for: parent ids + subtask ids
+      const allIssueIds = new Set<string>();
+      parents.forEach(p => allIssueIds.add(p.id));
+      Object.values(subtaskIdsByParentKey).forEach(arr => arr.forEach(id => allIssueIds.add(id)));
+
+      // 3) dev-status PRs for those issueIds
+      const prsByIssueId = await getJiraIssuePRs(Array.from(allIssueIds)).catch(() => ({} as Record<string, LinkedPR[]>));
+
+      // 4) gather unique PR urls per parent (self + subtasks)
+      const allUrls = new Set<string>();
+      const urlsByParentKey = new Map<string, string[]>();
+
+      for (const p of parents) {
+        const own = prsByIssueId[p.id] ?? [];
+        const childIds = subtaskIdsByParentKey[p.key] ?? [];
+        const childPRs: LinkedPR[] = childIds.flatMap(id => prsByIssueId[id] ?? []);
+
+        const urls = [...own, ...childPRs]
+          .map(pr => pr.url)
+          .filter(Boolean);
+
+        const unique = Array.from(new Set(urls));
+        urlsByParentKey.set(p.key, unique);
+        unique.forEach(u => { if (u.includes('github.com')) allUrls.add(u); });
+
+        // keep raw links on the issue (nice to have)
+        p.linkedPRs = [...own, ...childPRs];
+      }
+
+      // 5) fetch LOC for all unique PR urls
+      const statsByUrl = await getGithubPRStatsByUrls(Array.from(allUrls));
+
+      // 6) fold LOC totals into each parent issue
+      for (const p of parents) {
+        const urls = urlsByParentKey.get(p.key) ?? [];
+        let add = 0;
+        let del = 0;
+        for (const u of urls) {
+          const s = statsByUrl[u];
+          if (s) {
+            add += s.additions;
+            del += s.deletions;
+          }
+        }
+        p.prAdditions = add;
+        p.prDeletions = del;
+      }
+    } catch (e) {
+      warnings.push('PR → LOC aggregation unavailable (dev-status/permissions)');
     }
 
     // Dates
@@ -233,6 +300,10 @@ export async function GET(req: Request) {
     const pct = (num: number, den: number): number =>
       den > 0 ? Number(((num / den) * 100).toFixed(1)) : 0;
 
+    // NEW: sprint totals for PR LOC
+    const totalPRAdditions = issues.reduce((a, it) => a + (it.prAdditions ?? 0), 0);
+    const totalPRDeletions = issues.reduce((a, it) => a + (it.prDeletions ?? 0), 0);
+
     const kpis: SprintKPI = {
       committedSP,
       scopeAddedSP: addedSP,
@@ -249,6 +320,10 @@ export async function GET(req: Request) {
       completeCompletedSP,
       completeRemainingSP,
       completeCompletionPct: pct(completeCompletedSP, totalScope),
+
+      // NEW totals
+      totalPRAdditions,
+      totalPRDeletions,
     };
 
     const payload: SprintStatsResponse = {

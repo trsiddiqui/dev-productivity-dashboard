@@ -167,12 +167,97 @@ export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   while (true) {
     const url = `https://api.github.com/orgs/${encodeURIComponent(cfg.githubOrg)}/members?per_page=100&page=${page}`;
     const resp = await fetch(url, { headers });
-    console.log(resp)
     if (!resp.ok) throw new Error(`GitHub members failed with ${resp.status}`);
     const list = (await resp.json()) as Array<{ login: string; avatar_url?: string }>;
     if (list.length === 0) break;
     out.push(...list.map(m => ({ login: m.login, avatarUrl: m.avatar_url })));
     page += 1;
   }
+  return out;
+}
+
+/* =============================== */
+/*   NEW: stats by PR URL list     */
+/* =============================== */
+
+type PullRef = { owner: string; repo: string; number: number; url: string };
+
+/** Parse https://github.com/{owner}/{repo}/pull/{number} or API variants */
+function parsePullUrl(url: string): PullRef | null {
+  try {
+    const u = new URL(url);
+    // REST api form
+    const apiMatch = u.hostname === 'api.github.com'
+      ? u.pathname.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)/i)
+      : null;
+    if (apiMatch) {
+      return { owner: apiMatch[1], repo: apiMatch[2], number: Number(apiMatch[3]), url };
+    }
+    // web form
+    const webMatch = u.hostname.endsWith('github.com')
+      ? u.pathname.match(/^\/([^/]+)\/([^/]+)\/pulls?\/(\d+)/i)
+      : null;
+    if (webMatch) {
+      return { owner: webMatch[1], repo: webMatch[2], number: Number(webMatch[3]), url };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getGithubPRStatsByUrls(
+  urls: string[]
+): Promise<Record<string, { additions: number; deletions: number }>> {
+  if (!cfg.githubToken) return {};
+  const refs = urls
+    .map(parsePullUrl)
+    .filter((x): x is PullRef => !!x);
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${cfg.githubToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  const out: Record<string, { additions: number; deletions: number }> = {};
+  const query = `
+    query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          number
+          url
+          additions
+          deletions
+        }
+      }
+    }
+  `;
+
+  // modest concurrency
+  const chunks: PullRef[][] = [];
+  const size = 10;
+  for (let i = 0; i < refs.length; i += size) chunks.push(refs.slice(i, i + size));
+
+  for (const batch of chunks) {
+    await Promise.all(
+      batch.map(async (ref) => {
+        try {
+          const resp = await fetch('https://api.github.com/graphql', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ query, variables: { owner: ref.owner, name: ref.repo, number: ref.number } }),
+          });
+          const json = await resp.json() as any;
+          const pr = json?.data?.repository?.pullRequest;
+          if (pr && typeof pr.additions === 'number' && typeof pr.deletions === 'number') {
+            out[ref.url] = { additions: pr.additions, deletions: pr.deletions };
+          }
+        } catch {
+          // ignore individual failures
+        }
+      })
+    );
+  }
+
   return out;
 }

@@ -23,6 +23,14 @@ export interface PR {
   jiraKeys?: string[];
 }
 
+/** PR reference coming from Jira dev-status or other sources */
+export interface LinkedPR {
+  id?: string;
+  url: string;
+  title?: string;
+  source?: 'dev-status' | 'commit-msg' | 'custom';
+}
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -35,7 +43,6 @@ export interface JiraIssue {
 
   // used by sprint helpers / UI
   created?: string;
-  updated?: string;     // ✅ added for /api/stats “updated in window”
   issueType?: string;
   parentKey?: string;
   epicKey?: string;
@@ -49,6 +56,11 @@ export interface JiraIssue {
   // NEW: phase durations (hours)
   inProgressToReviewHours?: number | null;
   reviewToCompleteHours?: number | null;
+
+  // NEW: dev-status PRs & aggregated LOC
+  linkedPRs?: LinkedPR[];
+  prAdditions?: number;
+  prDeletions?: number;
 }
 
 export interface KPIs {
@@ -148,6 +160,10 @@ export interface SprintKPI {
   completeCompletedSP: number;
   completeRemainingSP: number;
   completeCompletionPct: number;
+
+  // NEW: totals for PR LOC across all sprint tickets
+  totalPRAdditions?: number;
+  totalPRDeletions?: number;
 }
 
 export interface CompletedByAssignee {
@@ -223,12 +239,4 @@ export interface JiraProjectLite {
 export interface ProjectsResponse {
   projects: JiraProjectLite[];
   warnings?: string[];
-}
-
-/* --------- Linked PRs surfaced by Jira dev-status --------- */
-export interface LinkedPR {
-  id?: string;
-  url: string;
-  title?: string;
-  source?: 'dev-status' | string;
 }
