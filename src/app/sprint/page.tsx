@@ -279,6 +279,10 @@ export default function SprintPage(): JSX.Element {
       { label: 'Complete %', value: data.kpis.completeCompletionPct },
 
       { label: 'Tickets in QA', value: data.ticketsInQA ?? 0 },
+
+      // NEW totals for PR lines
+      { label: 'PR Lines Added', value: data.kpis.totalPRAdditions ?? 0 },
+      { label: 'PR Lines Deleted', value: data.kpis.totalPRDeletions ?? 0 },
     ];
   }, [data]);
 
@@ -440,6 +444,16 @@ export default function SprintPage(): JSX.Element {
                 {data.completedByAssignee.map((row: CompletedByAssignee) => {
                   const name = row.assignee;
                   const items = issuesByAssignee.get(name) ?? [];
+
+                  // NEW: per-assignee LOC (sum of parent ticket PR additions + deletions)
+                  const locChanged = items.reduce((acc, it) => {
+                    const adds = it.prAdditions ?? 0;
+                    const dels = it.prDeletions ?? 0;
+                    // Only count when we actually have aggregated data on the parent
+                    // (subtasks generally won't have prAdditions/prDeletions populated)
+                    return acc + adds + dels;
+                  }, 0);
+
                   const isOpen = openAssignees.has(name);
                   return (
                     <div
@@ -469,7 +483,8 @@ export default function SprintPage(): JSX.Element {
                         </button>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                      {/* NEW: three summary cards (Dev, Dev+QA, LOC Changed) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
                         <div style={{ background: 'rgba(59,130,246,0.18)', borderRadius: 8, padding: 10, border: '1px solid rgba(59,130,246,0.45)' }}>
                           <div style={{ fontSize: 12, color: '#93c5fd', marginBottom: 2 }}>(Dev) Completed</div>
                           <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>{row.devPoints}</div>
@@ -477,6 +492,12 @@ export default function SprintPage(): JSX.Element {
                         <div style={{ background: 'rgba(34,197,94,0.18)', borderRadius: 8, padding: 10, border: '1px solid rgba(34,197,94,0.45)' }}>
                           <div style={{ fontSize: 12, color: '#86efac', marginBottom: 2 }}>(Dev + QA) Completed</div>
                           <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>{row.completePoints}</div>
+                        </div>
+                        <div style={{ background: 'rgba(148,163,184,0.18)', borderRadius: 8, padding: 10, border: '1px solid rgba(148,163,184,0.45)' }}>
+                          <div style={{ fontSize: 12, color: '#cbd5e1', marginBottom: 2 }}>LOC Changed</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>
+                            <Num v={locChanged} />
+                          </div>
                         </div>
                       </div>
 
@@ -550,7 +571,7 @@ function Step({
 
   return (
     <div
-      title={date ? `${label} — ${parts.date} ${parts.timeTz}` : label}
+      title={date ? `${label} — ${parts.date} ${parts.timeTz}` : `${label}`}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -580,6 +601,23 @@ function Step({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value?: number }) {
+  return (
+    <div style={{
+      background: '#0b1220',
+      border: '1px solid rgba(148,163,184,0.35)',
+      borderRadius: 8,
+      padding: '6px 8px',
+      minWidth: 90
+    }}>
+      <div style={{ fontSize: 11, color: '#93a3b8' }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'right' }}>
+        <Num v={value ?? 0} />
+      </div>
     </div>
   );
 }
@@ -632,6 +670,12 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
           )}
           {issue.status && <Pill bg={statSty.bg} br={statSty.br}>{issue.status}</Pill>}
         </div>
+      </div>
+
+      {/* NEW: LOC mini cards */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <StatCard label="Lines Added" value={issue.prAdditions ?? 0} />
+        <StatCard label="Lines Deleted" value={issue.prDeletions ?? 0} />
       </div>
 
       {/* timeline */}
