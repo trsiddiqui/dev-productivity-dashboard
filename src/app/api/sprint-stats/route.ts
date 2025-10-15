@@ -77,14 +77,18 @@ export async function GET(req: Request) {
     );
 
     // Merge phase times + durations into issues
+    // NOTE: some tickets transition straight to Approved/Done without ever hitting a "review" status.
+    // In that case treat the complete timestamp as the review timestamp so "Dev Completed" reflects
+    // work that effectively finished development even if the explicit review status wasn't used.
     for (const it of issues) {
       const p = phaseTimes[it.key] ?? {};
       it.todoAt = p.todo;
       it.inProgressAt = p.inProgress;
-      it.reviewAt = p.review;
+      // fallback: if no explicit review timestamp, use complete timestamp so dev-completed includes it
+      it.reviewAt = p.review ?? p.complete;
       it.completeAt = p.complete;
-      it.inProgressToReviewHours = diffHours(p.inProgress, p.review);
-      it.reviewToCompleteHours = diffHours(p.review, p.complete);
+      it.inProgressToReviewHours = diffHours(p.inProgress, p.review ?? p.complete);
+      it.reviewToCompleteHours = diffHours(p.review ?? p.complete, p.complete);
     }
 
     // === NEW: Dev-status PR aggregation (parent + subtasks) ===
@@ -146,7 +150,7 @@ export async function GET(req: Request) {
         p.prAdditions = add;
         p.prDeletions = del;
       }
-    } catch (e) {
+    } catch {
       warnings.push('PR → LOC aggregation unavailable (dev-status/permissions)');
     }
 
