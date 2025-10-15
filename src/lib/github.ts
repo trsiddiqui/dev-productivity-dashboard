@@ -247,7 +247,19 @@ export async function getGithubPRStatsByUrls(
             headers,
             body: JSON.stringify({ query, variables: { owner: ref.owner, name: ref.repo, number: ref.number } }),
           });
-          const json = await resp.json() as any;
+          type PRStatsResponse = {
+            data?: {
+              repository?: {
+                pullRequest?: {
+                  number: number;
+                  url: string;
+                  additions: number;
+                  deletions: number;
+                } | null;
+              } | null;
+            };
+          };
+          const json = await resp.json() as PRStatsResponse;
           const pr = json?.data?.repository?.pullRequest;
           if (pr && typeof pr.additions === 'number' && typeof pr.deletions === 'number') {
             out[ref.url] = { additions: pr.additions, deletions: pr.deletions };

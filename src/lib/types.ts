@@ -43,6 +43,7 @@ export interface JiraIssue {
 
   // used by sprint helpers / UI
   created?: string;
+  updated?: string;
   issueType?: string;
   parentKey?: string;
   epicKey?: string;
