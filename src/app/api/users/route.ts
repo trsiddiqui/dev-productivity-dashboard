@@ -6,11 +6,13 @@ import type {
   GithubUser,
   JiraUserLite,
 } from '../../../lib/types';
+import { requireAuthOr401 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
   const warnings: string[] = [];
 
   // ✅ annotate the arrays so they aren't implicitly `any[]`

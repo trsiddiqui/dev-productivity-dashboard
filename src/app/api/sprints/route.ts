@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getJiraSprints } from '../../../lib/jira';
 import { JiraSprintLite } from '@/lib/types';
+import { requireAuthOr401 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,8 @@ export const dynamic = 'force-dynamic';
  * If boardId is missing, tries env JIRA_BOARD_ID.
  */
 export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+
   const warnings: string[] = [];
   try {
     const { searchParams } = new URL(req.url);

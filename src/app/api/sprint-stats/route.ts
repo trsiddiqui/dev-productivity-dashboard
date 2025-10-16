@@ -17,6 +17,7 @@ import type {
   LinkedPR,
 } from '../../../lib/types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
+import { requireAuthOr401 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,7 @@ function avgVelocity(series: number[], window = 5): number {
 }
 
 export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
   const warnings: string[] = [];
 
   try {
