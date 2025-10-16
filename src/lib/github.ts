@@ -167,6 +167,7 @@ export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   while (true) {
     const url = `https://api.github.com/orgs/${encodeURIComponent(cfg.githubOrg)}/members?per_page=100&page=${page}`;
     const resp = await fetch(url, { headers });
+    console.log(resp)
     if (!resp.ok) throw new Error(`GitHub members failed with ${resp.status}`);
     const list = (await resp.json()) as Array<{ login: string; avatar_url?: string }>;
     if (list.length === 0) break;

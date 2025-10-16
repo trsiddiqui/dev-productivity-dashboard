@@ -3,11 +3,14 @@ import { getGithubPRsWithStats } from '../../../lib/github';
 import { getJiraIssuesUpdated } from '../../../lib/jira';
 import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
 import type { StatsResponse, KPIs, JiraIssue, PR } from '../../../lib/types';
+import { requireAuthOr401 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+
   const warnings: string[] = [];
   try {
     const { searchParams } = new URL(req.url);
