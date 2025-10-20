@@ -50,11 +50,15 @@ async function runJQL(params: {
   let nextPageToken: string | undefined;
 
   do {
-    const resp = await fetch(`${base}/rest/api/3/search/jql`, {
+    const url = `${base}/rest/api/3/search/jql`;
+    console.log(`[API FETCH START] POST ${url} (maxResults=${maxResults}, nextPageToken=${nextPageToken ?? 'none'})`);
+    const resp = await fetch(url, {
       method: 'POST',
       headers: { Authorization: auth, Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({ jql, fields, fieldsByKeys: true, maxResults, nextPageToken }),
     });
+    console.log(`[API FETCH END] POST ${url} -> ${resp.status}`);
+      
     if (!resp.ok) {
       let detail = '';
       try {
@@ -92,7 +96,9 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
     const url = new URL(`${base}/rest/api/3/project/search`);
     url.searchParams.set('startAt', String(startAt));
     url.searchParams.set('maxResults', String(maxResults));
+    console.log(`[API FETCH START] GET ${url.toString()}`);
     const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
+    console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
 
     if (resp.ok) {
       const data = await resp.json() as { values?: Array<{ key: string; name: string }>; isLast?: boolean; startAt?: number; maxResults?: number };
@@ -104,7 +110,10 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
     }
 
     if (resp.status === 404 || resp.status === 400) {
-      const resp2 = await fetch(`${base}/rest/api/3/project`, { headers: { Authorization: auth, Accept: 'application/json' } });
+      const url2 = `${base}/rest/api/3/project`;
+      console.log(`[API FETCH START] GET ${url2} (fallback)`);
+      const resp2 = await fetch(url2, { headers: { Authorization: auth, Accept: 'application/json' } });
+      console.log(`[API FETCH END] GET ${url2} -> ${resp2.status}`);
       if (!resp2.ok) return projects;
       const arr = await resp2.json() as Array<{ key: string; name: string }>;
       projects.push(...arr.map(p => ({ key: p.key, name: p.name })));
@@ -166,9 +175,17 @@ export async function getJiraDoneIssues(params: {
     issueTypeFilter,
   ].filter(Boolean).join(' AND ');
 
+  console.log(`[API CALL START] runJQL (done-issues jql1)`);
   const raw1 = await runJQL({ jql: jql1, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (done-issues jql1) -> items=${raw1.length}`);
+
+  console.log(`[API CALL START] runJQL (done-issues jql2)`);
   const raw2 = raw1.length ? [] : await runJQL({ jql: jql2, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (done-issues jql2) -> items=${raw2.length}`);
+
+  console.log(`[API CALL START] runJQL (done-issues jql3)`);
   const raw3 = (raw1.length || raw2.length) ? [] : await runJQL({ jql: jql3, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (done-issues jql3) -> items=${raw3.length}`);
 
   const picked = [...raw1, ...raw2, ...raw3];
   const byId = new Map<string, JiraIssue>();
@@ -217,15 +234,19 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
     url.searchParams.set('maxResults', String(maxResults));
     url.searchParams.set('query', '');
 
+    console.log(`[API FETCH START] GET ${url.toString()}`);
     const resp = await fetch(url.toString(), {
       headers: { Authorization: auth, Accept: 'application/json' },
     });
+    console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
 
     if (resp.status === 400) {
       url.searchParams.set('query', 'a');
+      console.log(`[API FETCH START] GET ${url.toString()} (fallback query='a')`);
       const resp2 = await fetch(url.toString(), {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
+      console.log(`[API FETCH END] GET ${url.toString()} -> ${resp2.status}`);
       if (!resp2.ok) return out;
       const arr2 = (await resp2.json()) as JiraUser[];
       if (arr2.length === 0) break;
@@ -294,7 +315,9 @@ export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]>
     url.searchParams.set('startAt', String(startAt));
     url.searchParams.set('maxResults', String(maxRes));
 
+    console.log(`[API FETCH START] GET ${url.toString()}`);
     const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
+    console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
     if (!resp.ok) break;
 
     const data = (await resp.json()) as JiraSprintsResp;
@@ -322,9 +345,12 @@ export async function getJiraSprintMeta(
   const base = jiraBase();
   const auth = jiraAuthHeader();
 
-  const resp = await fetch(`${base}/rest/agile/1.0/sprint/${sprintId}`, { headers: { Authorization: auth, Accept: 'application/json' } });
+  const url = `${base}/rest/agile/1.0/sprint/${sprintId}`;
+  console.log(`[API FETCH START] GET ${url}`);
+  const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+  console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
   if (!resp.ok) return null;
-
+  
   const d = (await resp.json()) as { id: number; name: string; state?: string; startDate?: string; endDate?: string };
   return { id: d.id, name: d.name, state: d.state, startDate: d.startDate, endDate: d.endDate };
 }
@@ -357,7 +383,9 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     url.searchParams.set('maxResults', String(maxRes));
     url.searchParams.set('fields', fields.join(','));
 
+    console.log(`[API FETCH START] GET ${url.toString()}`);
     const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
+    console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
     if (!resp.ok) break;
 
     const data = (await resp.json()) as { issues?: JiraAgileIssue[] };
@@ -415,9 +443,12 @@ export async function getJiraSprintScopeChanges(
 
   for (const key of issueKeys) {
     try {
-      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`, {
+      const url = `${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=none`;
+      console.log(`[API FETCH START] GET ${url}`);
+      const resp = await fetch(url, {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
+      console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
       if (!resp.ok) continue;
       const data = (await resp.json()) as {
         changelog?: {
@@ -480,9 +511,13 @@ export async function getIssuePhaseTimes(
 
   for (const key of issueKeys) {
     try {
-      const resp = await fetch(`${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=created,status`, {
+      const url = `${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=created,status`;
+      console.log(`[API FETCH START] GET ${url}`);
+      const resp = await fetch(url, {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
+      console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
+      
       if (!resp.ok) continue;
       const data = await resp.json() as {
         fields?: { created?: string; status?: { name?: string } };
@@ -529,7 +564,10 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
   for (const id of issueIds) {
     try {
       const url = `${base}/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(id)}&applicationType=GitHub&dataType=pullrequest`;
+      console.log(`[API FETCH START] GET ${url}`);
       const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+      console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
+      
       if (!resp.ok) { result[id] = []; continue; }
 
       const raw: unknown = await resp.json();
@@ -564,7 +602,9 @@ export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<st
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
   const jql = `parent in (${parentKeys.map(k => `"${k}"`).join(',')})`;
+  console.log(`[API CALL START] runJQL (subtasks)`);
   const issues = await runJQL({ jql, fields: ['parent'], auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (subtasks) -> items=${issues.length}`);
 
   type IssueWithParent = JiraIssueRaw & { fields: JiraIssueFields & { parent?: { key?: string } } };
 
@@ -621,7 +661,9 @@ export async function getJiraIssuesUpdated(params: {
     issueTypeFilter,
   ].filter(Boolean).join(' ');
 
+  console.log(`[API CALL START] runJQL (issues-updated)`);
   const raw = await runJQL({ jql, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (issues-updated) -> items=${raw.length}`);
 
   const byId = new Map<string, JiraIssue>();
   for (const issue of raw) {

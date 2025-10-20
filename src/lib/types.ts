@@ -58,10 +58,14 @@ export interface JiraIssue {
   inProgressToReviewHours?: number | null;
   reviewToCompleteHours?: number | null;
 
-  // NEW: dev-status PRs & aggregated LOC
+  // NEW: cycle time from first "To Do/Created" to "Review" (hours)
+  todoToReviewHours?: number | null;
+
+  // NEW: dev-status PRs & aggregated metrics
   linkedPRs?: LinkedPR[];
   prAdditions?: number;
   prDeletions?: number;
+  prReviewComments?: number; // total code-review comments across linked PRs
 }
 
 export interface KPIs {

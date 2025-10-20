@@ -6,8 +6,8 @@ import {
   getIssuePhaseTimes,
   getJiraIssuePRs,
   getJiraSubtaskIds,
-} from '../../../lib/jira';
-import { getGithubPRStatsByUrls } from '../../../lib/github';
+} from '@/lib/jira';
+import { getGithubPRStatsByUrls } from '@/lib/github';
 import type {
   SprintStatsResponse,
   JiraIssue,
@@ -15,7 +15,7 @@ import type {
   SprintKPI,
   CompletedByAssignee,
   LinkedPR,
-} from '../../../lib/types';
+} from '@/lib/types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 import { requireAuthOr401 } from '@/lib/auth';
 
