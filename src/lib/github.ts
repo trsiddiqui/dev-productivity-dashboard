@@ -151,7 +151,6 @@ function buildScopeFilter(): string {
   return parts.join(' ');
 }
 
-
 /** New: list members of a GitHub org (needs read:org token) */
 export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
@@ -167,7 +166,6 @@ export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   while (true) {
     const url = `https://api.github.com/orgs/${encodeURIComponent(cfg.githubOrg)}/members?per_page=100&page=${page}`;
     const resp = await fetch(url, { headers });
-    console.log(resp)
     if (!resp.ok) throw new Error(`GitHub members failed with ${resp.status}`);
     const list = (await resp.json()) as Array<{ login: string; avatar_url?: string }>;
     if (list.length === 0) break;
@@ -178,7 +176,7 @@ export async function getGithubOrgMembers(): Promise<GithubUser[]> {
 }
 
 /* =============================== */
-/*   NEW: stats by PR URL list     */
+/*   Stats by PR URL list (LOC + review comments)  */
 /* =============================== */
 
 type PullRef = { owner: string; repo: string; number: number; url: string };
@@ -209,7 +207,7 @@ function parsePullUrl(url: string): PullRef | null {
 
 export async function getGithubPRStatsByUrls(
   urls: string[]
-): Promise<Record<string, { additions: number; deletions: number }>> {
+): Promise<Record<string, { additions: number; deletions: number; reviewComments?: number }>> {
   if (!cfg.githubToken) return {};
   const refs = urls
     .map(parsePullUrl)
@@ -220,7 +218,7 @@ export async function getGithubPRStatsByUrls(
     'Content-Type': 'application/json',
   };
 
-  const out: Record<string, { additions: number; deletions: number }> = {};
+  const out: Record<string, { additions: number; deletions: number; reviewComments?: number }> = {};
   const query = `
     query($owner: String!, $name: String!, $number: Int!) {
       repository(owner: $owner, name: $name) {
@@ -229,6 +227,11 @@ export async function getGithubPRStatsByUrls(
           url
           additions
           deletions
+          reviewThreads(first: 100) {
+            nodes {
+              comments { totalCount }
+            }
+          }
         }
       }
     }
@@ -256,6 +259,9 @@ export async function getGithubPRStatsByUrls(
                   url: string;
                   additions: number;
                   deletions: number;
+                  reviewThreads?: {
+                    nodes?: Array<{ comments?: { totalCount?: number } }>;
+                  } | null;
                 } | null;
               } | null;
             };
@@ -263,7 +269,10 @@ export async function getGithubPRStatsByUrls(
           const json = await resp.json() as PRStatsResponse;
           const pr = json?.data?.repository?.pullRequest;
           if (pr && typeof pr.additions === 'number' && typeof pr.deletions === 'number') {
-            out[ref.url] = { additions: pr.additions, deletions: pr.deletions };
+            const commentSum =
+              pr.reviewThreads?.nodes?.reduce((acc, n) => acc + (n.comments?.totalCount ?? 0), 0) ?? 0;
+
+            out[ref.url] = { additions: pr.additions, deletions: pr.deletions, reviewComments: commentSum };
           }
         } catch {
           // ignore individual failures

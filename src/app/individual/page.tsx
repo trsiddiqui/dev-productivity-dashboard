@@ -11,7 +11,7 @@ import type {
   JiraUserLite,
   ProjectsResponse,
   JiraProjectLite,
-} from '../../lib/types';
+} from '@/lib/types';
 import { KPIsView } from '../components/KPIs';
 import { LineByDay } from '../components/LineByDay';
 import { SearchableSelect, Option } from '../components/SearchableSelect';

@@ -1,5 +1,6 @@
 'use client';
 
+import type { PieLabelRenderProps } from 'recharts/types/polar/Pie';
 import type React from 'react';
 import { JSX, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -18,6 +19,9 @@ import {
   ResponsiveContainer,
   Tooltip,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
 
 const COMPACT_SWITCH_PX = 480;
@@ -262,6 +266,28 @@ export default function SprintPage(): JSX.Element {
     return m;
   }, [data]);
 
+  // Assigned story points per assignee → for pie
+  const assignedPointsByAssignee = useMemo(() => {
+    const mp = new Map<string, number>();
+    if (!data?.issues) return mp;
+    for (const it of data.issues) {
+      const who = it.assignee && it.assignee.trim() ? it.assignee : 'Unassigned';
+      const pts = typeof it.storyPoints === 'number' ? it.storyPoints : 0;
+      mp.set(who, (mp.get(who) ?? 0) + pts);
+    }
+    return mp;
+  }, [data]);
+
+  const pieData = useMemo(
+    () =>
+      Array.from(assignedPointsByAssignee.entries())
+        .map(([name, value]) => ({ name, value }))
+        .filter(d => d.value > 0)
+        .sort((a, b) => b.value - a.value),
+    [assignedPointsByAssignee]
+  );
+  const pieColors = ['#60a5fa','#34d399','#f472b6','#f59e0b','#a78bfa','#f87171','#10b981','#c084fc','#22d3ee','#fb7185','#93c5fd'];
+
   // ---- UI bits ----
   const kpiCards = useMemo(() => {
     if (!data) return [];
@@ -280,7 +306,7 @@ export default function SprintPage(): JSX.Element {
 
       { label: 'Tickets in QA', value: data.ticketsInQA ?? 0 },
 
-      // NEW totals for PR lines
+      // totals for PR lines across sprint
       { label: 'PR Lines Added', value: data.kpis.totalPRAdditions ?? 0 },
       { label: 'PR Lines Deleted', value: data.kpis.totalPRDeletions ?? 0 },
     ];
@@ -394,7 +420,7 @@ export default function SprintPage(): JSX.Element {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
               gap: 12,
               marginBottom: 16,
             }}
@@ -418,21 +444,50 @@ export default function SprintPage(): JSX.Element {
             ))}
           </div>
 
-          {/* Burn chart */}
-          <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)', marginBottom: 16 }}>
-            <h2 style={{ fontWeight: 600, marginBottom: 8, color: '#e5e7eb' }}>Sprint Burn</h2>
-            <div style={{ width: '100%', height: 340 }}>
-              <ResponsiveContainer>
-                <LineChart data={data.burn} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                  <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
-                  <XAxis dataKey="date" stroke="#94a3b8" tickMargin={8} />
-                  <YAxis stroke="#94a3b8" allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="devRemaining" name="Dev Remaining" stroke="#60a5fa" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="completeRemaining" name="Complete Remaining" stroke="#22c55e" dot={false} strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+          {/* Burn + Story-point distribution */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 16 }}>
+            {/* Burn chart */}
+            <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+              <h2 style={{ fontWeight: 600, marginBottom: 8, color: '#e5e7eb' }}>Sprint Burn</h2>
+              <div style={{ width: '100%', height: 340 }}>
+                <ResponsiveContainer>
+                  <LineChart data={data.burn} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
+                    <XAxis dataKey="date" stroke="#94a3b8" tickMargin={8} />
+                    <YAxis stroke="#94a3b8" allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="devRemaining" name="Dev Remaining" stroke="#60a5fa" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="completeRemaining" name="Complete Remaining" stroke="#22c55e" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Pie: SP distribution by assignee */}
+            <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+              <h2 style={{ fontWeight: 600, marginBottom: 8, color: '#e5e7eb' }}>Story Points by Assignee</h2>
+              <div style={{ width: '100%', height: 340 }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      dataKey="value"
+                      nameKey="name"
+                      data={pieData}
+                      innerRadius="50%"
+                      outerRadius="80%"
+                      labelLine={false}
+                      label={(p: PieLabelRenderProps) => String(p.value)}
+                    >
+                      {pieData.map((_, idx) => (
+                        <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
@@ -445,14 +500,29 @@ export default function SprintPage(): JSX.Element {
                   const name = row.assignee;
                   const items = issuesByAssignee.get(name) ?? [];
 
-                  // NEW: per-assignee LOC (sum of parent ticket PR additions + deletions)
-                  const locChanged = items.reduce((acc, it) => {
-                    const adds = it.prAdditions ?? 0;
-                    const dels = it.prDeletions ?? 0;
-                    // Only count when we actually have aggregated data on the parent
-                    // (subtasks generally won't have prAdditions/prDeletions populated)
-                    return acc + adds + dels;
-                  }, 0);
+                  // per-assignee LOC (sum of parent ticket PR additions + deletions)
+                  const locChanged = items.reduce((acc, it) => acc + (it.prAdditions ?? 0) + (it.prDeletions ?? 0), 0);
+
+                  // NEW: total review comments for this assignee
+                  const reviewComments = items.reduce((acc, it) => acc + (it.prReviewComments ?? 0), 0);
+
+                  // NEW: assigned SP regardless of status
+                  const assignedSP = items.reduce((acc, it) => acc + (it.storyPoints ?? 0), 0);
+
+                  // NEW: average cycle time / SP (ToDo/Created → Review)
+                  let hoursSum = 0;
+                  let spSumForCycle = 0;
+                  for (const it of items) {
+                    const sp = it.storyPoints ?? 0;
+                    if (sp > 0 && it.todoToReviewHours !== null && it.todoToReviewHours !== undefined) {
+                      hoursSum += it.todoToReviewHours!;
+                      spSumForCycle += sp;
+                    }
+                  }
+                  const avgHoursPerSP: number | null = spSumForCycle > 0 ? hoursSum / spSumForCycle : null;
+
+                  // LOC per SP
+                  const locPerSP = assignedSP > 0 ? locChanged / assignedSP : 0;
 
                   const isOpen = openAssignees.has(name);
                   return (
@@ -483,8 +553,8 @@ export default function SprintPage(): JSX.Element {
                         </button>
                       </div>
 
-                      {/* NEW: three summary cards (Dev, Dev+QA, LOC Changed) */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
+                      {/* NEW: summary cards (Dev, Dev+QA, LOC Changed, Assigned SP, Avg Cycle/LOC per SP, Review Cmts) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1.3fr', gap: 8, marginTop: 10 }}>
                         <div style={{ background: 'rgba(59,130,246,0.18)', borderRadius: 8, padding: 10, border: '1px solid rgba(59,130,246,0.45)' }}>
                           <div style={{ fontSize: 12, color: '#93c5fd', marginBottom: 2 }}>(Dev) Completed</div>
                           <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>{row.devPoints}</div>
@@ -498,7 +568,41 @@ export default function SprintPage(): JSX.Element {
                           <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>
                             <Num v={locChanged} />
                           </div>
+                        </div>                      </div>
+
+                      {/* NEW: summary cards (Dev, Dev+QA, LOC Changed, Assigned SP, Avg Cycle/LOC per SP, Review Cmts) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginTop: 10 }}>
+                        {/* Assigned SP */}
+                        <div style={{ background: 'rgba(99,102,241,0.18)', borderRadius: 8, padding: 10, border: '1px solid rgba(99,102,241,0.4)' }}>
+                          <div style={{ fontSize: 12, color: '#c7d2fe', marginBottom: 2 }}>Assigned SP</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>
+                            <Num v={assignedSP} />
+                          </div>
                         </div>
+
+                        {/* Two-part: Avg Cycle / SP + LOC / SP */}
+                        <div style={{ background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: 10, border: '1px solid rgba(99,102,241,0.3)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 12, color: '#a5b4fc', marginBottom: 2 }}>Avg Cycle / SP</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
+                              {avgHoursPerSP !== null ? <Hrs v={avgHoursPerSP} /> : <span>—</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 12, color: '#a5b4fc', marginBottom: 2 }}>LOC / SP</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
+                              {assignedSP > 0 ? locPerSP.toFixed(1) : '—'}
+                            </div>
+                          </div>
+                        </div>{/* Review comments (total) */}
+                        <div style={{ background: 'rgba(20,184,166,0.12)', borderRadius: 8, padding: 10, border: '1px solid rgba(20,184,166,0.35)' }}>
+                          <div style={{ fontSize: 12, color: '#99f6e4', marginBottom: 2 }}>Review Cmts</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'right' }}>
+                            <Num v={reviewComments} />
+                          </div>
+                        </div>
+
+                        
                       </div>
 
                       {/* Collapsible ticket timelines */}
@@ -668,14 +772,17 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
           {typeof issue.storyPoints === 'number' && (
             <Pill bg="rgba(99,102,241,0.18)" br="rgba(99,102,241,0.4)">{issue.storyPoints} SP</Pill>
           )}
-          {issue.status && <Pill bg={statSty.bg} br={statSty.br}>{issue.status}</Pill>}
+          {issue.status && <Pill bg={statSty.bg} br={statSty.br}>{issue.status}</Pill>
+          }
         </div>
       </div>
 
-      {/* NEW: LOC mini cards */}
+      {/* LOC + review counts mini cards */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <StatCard label="Lines Added" value={issue.prAdditions ?? 0} />
         <StatCard label="Lines Deleted" value={issue.prDeletions ?? 0} />
+        {/* NEW: review comments per ticket */}
+        <StatCard label="Review Cmts" value={issue.prReviewComments ?? 0} />
       </div>
 
       {/* timeline */}
