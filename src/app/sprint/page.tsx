@@ -1242,9 +1242,8 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         border: `1px solid ${palette.cardBr}`,
         borderRadius: 10,
         padding: 10,
-        background: "#0b1220",
-        color: palette.cardFg,
       }}
+        className={`${issue.status?.toLowerCase()}-card`}
     >
       {/* header */}
       <div
