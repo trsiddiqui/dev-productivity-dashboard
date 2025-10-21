@@ -27,6 +27,44 @@
   --muted: #94a3b8;
   --surface-card: var(--surface);
   --border: var(--surface-border);
+
+  
+
+/* Neutral / planning */
+.todo-card {
+  background-color: #1F2937; /* slate-800 */
+  color: #FFFFFF;
+}
+
+/* Actively moving */
+.in-progress-card {
+  background-color: #1E40AF; /* blue-800 */
+  color: #FFFFFF;
+}
+
+/* Approved (distinct from done) */
+.approved-card {
+  background-color: #115E59; /* teal-800 */
+  color: #FFFFFF;
+}
+
+/* Completed */
+.done-card {
+  background-color: #166534; /* green-800 */
+  color: #FFFFFF;
+}
+
+/* Merged (keeps the GitHub-ish purple cue) */
+.merged-card {
+  background-color: #5B21B6; /* violet-800 */
+  color: #FFFFFF;
+}
+
+/* Blocked / needs attention */
+.impeded-card {
+  background-color: #991B1B; /* red-800 */
+  color: #FFFFFF;
+}
 }
 
 /* ===== Light theme overrides ===== */
@@ -48,6 +86,44 @@
   --muted: #64748b;
   --surface-card: var(--surface);
   --border: var(--surface-border);
+
+  
+
+/* Neutral / planning */
+.todo-card {
+  background-color: #8b8b8b; /* slate-800 */
+  color: #0a0a0a;
+}
+
+/* Actively moving */
+.in-progress-card {
+  background-color: #1E40AF; /* blue-800 */
+  color: #838383;
+}
+
+/* Approved (distinct from done) */
+.approved-card {
+  background-color: #115E59; /* teal-800 */
+  color: #888888;
+}
+
+/* Completed */
+.done-card {
+  background-color: #166534; /* green-800 */
+  color: #7f7f7f;
+}
+
+/* Merged (keeps the GitHub-ish purple cue) */
+.merged-card {
+  background-color: #5B21B6; /* violet-800 */
+  color: #797979;
+}
+
+/* Blocked / needs attention */
+.impeded-card {
+  background-color: #991B1B; /* red-800 */
+  color: #757575;
+}
 }
 
 /* App base */
@@ -95,39 +171,3 @@ body {
 .app-nav a { color: var(--surface-link); text-decoration: none; }
 .app-nav .brand { font-weight: 700; }
 .app-nav .spacer { flex: 1; }
-
-/* Neutral / planning */
-.todo-card {
-  background-color: #1F2937; /* slate-800 */
-  color: #FFFFFF;
-}
-
-/* Actively moving */
-.in-progress-card {
-  background-color: #1E40AF; /* blue-800 */
-  color: #FFFFFF;
-}
-
-/* Approved (distinct from done) */
-.approved-card {
-  background-color: #115E59; /* teal-800 */
-  color: #FFFFFF;
-}
-
-/* Completed */
-.done-card {
-  background-color: #166534; /* green-800 */
-  color: #FFFFFF;
-}
-
-/* Merged (keeps the GitHub-ish purple cue) */
-.merged-card {
-  background-color: #5B21B6; /* violet-800 */
-  color: #FFFFFF;
-}
-
-/* Blocked / needs attention */
-.impeded-card {
-  background-color: #991B1B; /* red-800 */
-  color: #FFFFFF;
-}

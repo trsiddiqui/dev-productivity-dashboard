@@ -746,7 +746,7 @@ export default function SprintPage(): JSX.Element {
                     0
                   );
                   const assignedSP = items.reduce((acc, it) => acc + (it.storyPoints ?? 0), 0);
-                  const locPerSP = assignedSP > 0 ? locChanged / assignedSP : 0;
+                  const locPerSP = row.devPoints > 0 ? locChanged / row.devPoints : 0;
 
                   const isOpen = openAssignees.has(name);
                   return (
@@ -810,7 +810,7 @@ export default function SprintPage(): JSX.Element {
                       >
                         <MiniStat label="Assigned SP" value={assignedSP} tint={palette.story} />
                         <MiniStat
-                          label="LOC / SP"
+                          label="LOC / SP (So far)"
                           value={assignedSP > 0 ? Number(locPerSP.toFixed(1)) : 0}
                           tint={palette.story}
                         />
@@ -1006,7 +1006,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         border: `1px solid ${t.cardBr}`,
         borderRadius: 12,
         padding: 12,
-        background: t.surface,
+        // background: t.surface,
       }}
       className={`${statusSlug}-card`}
     >
