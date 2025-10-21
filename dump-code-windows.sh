@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Usage:  bash ./dump-code-windows.sh > code.txt
+# Usage:  bash ./dump-code-windows.sh > code_dump.txt
 # Dump developer-written source files with relative paths.
 # Works on GNU find (Git Bash/MSYS2/Cygwin/WSL) and BSD find (macOS).
 # Skips lockfiles, build outputs, and generated code.
