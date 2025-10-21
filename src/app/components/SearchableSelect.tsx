@@ -18,6 +18,25 @@ interface SearchableSelectProps {
   emptyHint?: string;
   style?: React.CSSProperties; // NEW
 }
+/* ===================== Theme-aware tokens ===================== */
+/** Use CSS vars so the whole page adapts to [data-theme] */
+const t = {
+  // surfaces
+  appBg: "var(--background)",
+  appFg: "var(--foreground)",
+  surface: "var(--surface)",
+  border: "var(--border)",
+  link: "var(--surface-link)",
+  faintText: "var(--faint-text)",
+
+  // cards
+  cardBg: "var(--card-bg)",
+  cardFg: "var(--card-fg)",
+  cardBr: "var(--card-br)",
+
+  // general
+  muted: "var(--muted)",
+};
 
 export function SearchableSelect({
   items,
@@ -122,8 +141,9 @@ export function SearchableSelect({
           width: '100%',
           padding: '8px 10px',
           borderRadius: 8,
-          border: '1px solid #ddd',
-          background: disabled ? 'grey' : 'black'
+          border: '1px solid #ddd',          
+          background: t.cardBg, 
+          color: t.cardFg,
         }}
       />
 
