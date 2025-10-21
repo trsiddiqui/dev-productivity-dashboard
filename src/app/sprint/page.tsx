@@ -502,8 +502,10 @@ export default function SprintPage(): JSX.Element {
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={boardId}
-              onChange={(e) => setBoardId(e.target.value)}
-              placeholder="e.g., 123"
+              onChange={(e) => {
+                setBoardId(e.target.value)
+              }}
+              placeholder="e.g., 126 for PE, 97 for PC"
               style={{
                 flex: 1,
                 padding: "8px 10px",
@@ -945,6 +947,7 @@ export default function SprintPage(): JSX.Element {
                               fontSize: 20,
                               fontWeight: 800,
                               textAlign: "right",
+                              marginTop: 20
                             }}
                           >
                             <Num v={locChanged} />
@@ -956,7 +959,7 @@ export default function SprintPage(): JSX.Element {
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "1fr 2fr 1fr",
+                          gridTemplateColumns: "1.5fr 1.5fr",
                           gap: 8,
                           marginTop: 10,
                         }}
@@ -1002,7 +1005,7 @@ export default function SprintPage(): JSX.Element {
                             gap: 8,
                           }}
                         >
-                          <div>
+                          {/* <div>
                             <div
                               style={{
                                 fontSize: 12,
@@ -1025,7 +1028,7 @@ export default function SprintPage(): JSX.Element {
                                 <span>—</span>
                               )}
                             </div>
-                          </div>
+                          </div> */}
                           <div>
                             <div
                               style={{
@@ -1048,7 +1051,7 @@ export default function SprintPage(): JSX.Element {
                           </div>
                         </div>
                         {/* Review comments (total) */}
-                        <div
+                        {/* <div
                           style={{
                             background: "rgba(20,184,166,0.12)",
                             borderRadius: 8,
@@ -1074,7 +1077,7 @@ export default function SprintPage(): JSX.Element {
                           >
                             <Num v={reviewComments} />
                           </div>
-                        </div>
+                        </div> */}
                       </div>
 
                       {/* Collapsible ticket timelines */}
