@@ -72,8 +72,9 @@ export async function GET(req: NextRequest) {
       const json = await resp.json();
       progress(100, 'Done');
       write({ type: 'done', result: json });
-    } catch (err: any) {
-      write({ type: 'error', message: err?.message || 'Unexpected error' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unexpected error';
+      write({ type: 'error', message });
     } finally {
       await writer.close();
     }

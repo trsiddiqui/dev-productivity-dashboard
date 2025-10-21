@@ -3,7 +3,6 @@
 import { JSX, useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import type {
-  PR,
   JiraIssue,
   StatsResponse,
   UsersResponse,
@@ -70,7 +69,6 @@ export default function Page(): JSX.Element {
         setLoadingProjects(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const ghOptions: Option[] = useMemo(() => {
@@ -120,14 +118,6 @@ export default function Page(): JSX.Element {
       setLoading(false);
     }
   }
-
-  const ticketUrlByKey = useMemo(() => {
-    const map = new Map<string, string>();
-    if (data) {
-      data.tickets.forEach((t: JiraIssue) => map.set(t.key, t.url));
-    }
-    return map;
-  }, [data]);
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>

@@ -270,8 +270,6 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
 
 /* ================== Agile / Sprint helpers (unchanged below where used) ================== */
 
-interface JiraBoard { id: number; name: string; type?: string }
-
 interface JiraSprintValue {
   id: number;
   name: string;

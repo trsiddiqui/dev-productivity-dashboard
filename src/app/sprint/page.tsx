@@ -194,35 +194,6 @@ function Pill({
   );
 }
 
-// ——— small UI helpers (unchanged) ———
-function Badge({
-  children,
-  bg = "#eef2ff",
-  fg = "#1e40af",
-  br = "#c7d2fe",
-}: {
-  children: React.ReactNode;
-  bg?: string;
-  fg?: string;
-  br?: string;
-}) {
-  return (
-    <span
-      style={{
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 12,
-        background: bg,
-        color: fg,
-        border: `1px solid ${br}`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
 /* ===================== Main Page ===================== */
 export default function SprintPage(): JSX.Element {
   // Controls
@@ -450,8 +421,9 @@ export default function SprintPage(): JSX.Element {
       setData(json);
       setPct(100);
       setStage("Done");
-    } catch (e: any) {
-      setError(e?.message || "Failed to fetch stats");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to fetch stats";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -503,7 +475,7 @@ export default function SprintPage(): JSX.Element {
             <input
               value={boardId}
               onChange={(e) => {
-                setBoardId(e.target.value)
+                setBoardId(e.target.value);
               }}
               placeholder="e.g., 126 for PE, 97 for PC"
               style={{
@@ -947,7 +919,7 @@ export default function SprintPage(): JSX.Element {
                               fontSize: 20,
                               fontWeight: 800,
                               textAlign: "right",
-                              marginTop: 20
+                              marginTop: 20,
                             }}
                           >
                             <Num v={locChanged} />
