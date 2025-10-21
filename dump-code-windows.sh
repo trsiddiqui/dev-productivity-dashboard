@@ -13,6 +13,11 @@ cd "$ROOT"
 # Ensure consistent sort order across locales
 export LC_ALL=C
 
+# --- Pre-run cleanup: remove all ".history" directories under ROOT ---
+# This deletes the .history folder and all its contents (root-level or nested).
+# Works with GNU/BSD find.
+find . -type d -name .history -prune -exec rm -rf {} + || true
+
 # Print each matching file with its contents
 find . \
   -type d \( -name node_modules -o -name .next -o -name .vscode -o -name .git -o -name dist -o -name build -o -name out -o -name coverage -o -name .cache -o -name tmp \) -prune -o \

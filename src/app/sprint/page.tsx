@@ -1,3 +1,4 @@
+// src/app/sprint/page.tsx
 "use client";
 import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -24,9 +25,29 @@ import {
 
 const COMPACT_SWITCH_PX = 480;
 
+/* ===================== Theme-aware tokens ===================== */
+/** Use CSS vars so the whole page adapts to [data-theme] */
+const t = {
+  // surfaces
+  appBg: "var(--background)",
+  appFg: "var(--foreground)",
+  surface: "var(--surface)",
+  border: "var(--border)",
+  link: "var(--surface-link)",
+  faintText: "var(--faint-text)",
+
+  // cards
+  cardBg: "var(--card-bg)",
+  cardFg: "var(--card-fg)",
+  cardBr: "var(--card-br)",
+
+  // general
+  muted: "var(--muted)",
+};
+
 /* ===================== Palette / helpers ===================== */
 const palette = {
-  // stages
+  // stages (kept vivid)
   todo: "#94a3b8",
   progress: "#3b82f6",
   review: "#8b5cf6",
@@ -38,20 +59,9 @@ const palette = {
   bug: "#ef4444",
   task: "#0ea5e9",
   spike: "#14b8a6",
-
-  // shells
-  cardBg: "#0f172a",
-  cardFg: "#e5e7eb",
-  cardBr: "#1f2937",
-  faint: "#cbd5e1",
 };
 
-const TODO_STATUS_NAMES = [
-  "To Do",
-  "Open",
-  "Backlog",
-  "Selected for Development",
-];
+const TODO_STATUS_NAMES = ["To Do", "Open", "Backlog", "Selected for Development"];
 const INPROGRESS_STATUS_NAMES = [
   "In Progress",
   "In Development",
@@ -61,17 +71,15 @@ const INPROGRESS_STATUS_NAMES = [
 ];
 const DEV_STATUS_NAMES = ["Reviewed", "Review", "In Review"];
 const COMPLETE_STATUS_NAMES = ["Approved", "Done"];
-const BLOCKED_STATUS_NAMES = [
-  "Blocked",
-  "On Hold",
-  "Impeded",
-  "Awaiting",
-  "Hold",
-];
+const BLOCKED_STATUS_NAMES = ["Blocked", "On Hold", "Impeded", "Awaiting", "Hold"];
 
-function normalize(s?: string): string {
-  return (s ?? "").trim().toLowerCase();
-}
+const normalize = (s?: string) => (s ?? "").trim().toLowerCase();
+const toSlug = (s?: string) =>
+  (s ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .trim();
 
 function statusGroup(
   status?: string
@@ -86,18 +94,13 @@ function statusGroup(
 }
 
 function typeColor(issueType?: string): { bg: string; fg: string; br: string } {
-  const t = normalize(issueType);
-  const pick = (hex: string) => ({
-    bg: `rgba(${hexToRgb(hex)}, 0.18)`,
-    fg: "#ffffff",
-    br: `rgba(${hexToRgb(hex)}, 0.45)`,
-  });
-  if (t === "bug") return pick(palette.bug);
-  if (t === "task") return pick(palette.task);
-  if (t === "spike") return pick(palette.spike);
+  const tName = normalize(issueType);
+  const pick = (hex: string) => ({ bg: `rgba(${hexToRgb(hex)}, 0.14)`, fg: t.cardFg, br: `rgba(${hexToRgb(hex)}, 0.35)` });
+  if (tName === "bug") return pick(palette.bug);
+  if (tName === "task") return pick(palette.task);
+  if (tName === "spike") return pick(palette.spike);
   return pick(palette.story);
 }
-
 function statusColor(status?: string): { bg: string; fg: string; br: string } {
   const g = statusGroup(status);
   const hex =
@@ -112,13 +115,8 @@ function statusColor(status?: string): { bg: string; fg: string; br: string } {
       : g === "blocked"
       ? palette.blocked
       : "#64748b";
-  return {
-    bg: `rgba(${hexToRgb(hex)}, 0.18)`,
-    fg: "#ffffff",
-    br: `rgba(${hexToRgb(hex)}, 0.45)`,
-  };
+  return { bg: `rgba(${hexToRgb(hex)}, 0.14)`, fg: t.cardFg, br: `rgba(${hexToRgb(hex)}, 0.35)` };
 }
-
 function hexToRgb(hex: string): string {
   const m = hex.replace("#", "");
   const bigint = parseInt(m, 16);
@@ -133,9 +131,8 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
   if (!iso) return { date: "—", timeTz: "" };
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return { date: "—", timeTz: "" };
-
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago", // ✅ Central Time
+    timeZone: "America/Chicago",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -144,7 +141,6 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
     hour12: false,
     timeZoneName: "short",
   }).formatToParts(d);
-
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   const yyyy = get("year");
   const mm = get("month");
@@ -152,7 +148,6 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
   const hh = get("hour");
   const mi = get("minute");
   const tz = get("timeZoneName") || "CT";
-
   return { date: `${yyyy}-${mm}-${dd}`, timeTz: `${hh}:${mi} ${tz}` };
 }
 
@@ -170,7 +165,7 @@ function Pill({
   children,
   bg,
   br,
-  fg = palette.cardFg,
+  fg = t.cardFg,
 }: {
   children: React.ReactNode;
   bg: string;
@@ -208,38 +203,34 @@ export default function SprintPage(): JSX.Element {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: progress state
+  // progress (SSE)
   const [pct, setPct] = useState<number>(0);
   const [stage, setStage] = useState<string>("");
   const esRef = useRef<EventSource | null>(null);
 
-  // UI state: which assignees are expanded
+  // UI state: expanded people
   const [openAssignees, setOpenAssignees] = useState<Set<string>>(new Set());
 
-  // ---- helpers ----
-  const sprintOptions: Option[] = useMemo(() => {
-    return sprints.map((s) => ({
-      value: String(s.id),
-      label: s.name ?? `Sprint ${s.id}`,
-      subtitle: s.state ? s.state : undefined,
-    }));
-  }, [sprints]);
+  const sprintOptions: Option[] = useMemo(
+    () =>
+      sprints.map((s) => ({
+        value: String(s.id),
+        label: s.name ?? `Sprint ${s.id}`,
+        subtitle: s.state ? s.state : undefined,
+      })),
+    [sprints]
+  );
 
   async function loadSprints(selectedBoardId?: string): Promise<void> {
     const bid = selectedBoardId ?? boardId;
     if (!bid) return;
     setLoadingSprints(true);
     try {
-      const resp = await fetch(
-        `/api/sprints?boardId=${encodeURIComponent(bid)}`
-      );
+      const resp = await fetch(`/api/sprints?boardId=${encodeURIComponent(bid)}`);
       if (!resp.ok) throw new Error(await resp.text());
-      const json: { sprints: JiraSprintLite[]; warnings?: string[] } =
-        await resp.json();
+      const json: { sprints: JiraSprintLite[]; warnings?: string[] } = await resp.json();
 
       setWarnings(json.warnings ?? []);
-
-      // Order: latest → oldest
       const pickTime = (s: JiraSprintLite): number => {
         const end = s.endDate ? Date.parse(s.endDate) : Number.NaN;
         const start = s.startDate ? Date.parse(s.startDate) : Number.NaN;
@@ -247,15 +238,11 @@ export default function SprintPage(): JSX.Element {
         if (Number.isFinite(start)) return start;
         return -Infinity;
       };
-      const ordered = [...(json.sprints ?? [])].sort(
-        (a, b) => pickTime(b) - pickTime(a)
-      );
+      const ordered = [...(json.sprints ?? [])].sort((a, b) => pickTime(b) - pickTime(a));
       setSprints(ordered);
 
       if (!sprintId) {
-        const active = ordered.find(
-          (s) => (s.state ?? "").toLowerCase() === "active"
-        );
+        const active = ordered.find((s) => (s.state ?? "").toLowerCase() === "active");
         if (active) setSprintId(String(active.id));
       }
     } catch (e) {
@@ -271,8 +258,7 @@ export default function SprintPage(): JSX.Element {
     const m = new Map<string, JiraIssue[]>();
     if (!data?.issues) return m;
     for (const it of data.issues) {
-      const who =
-        it.assignee && it.assignee.trim() ? it.assignee : "Unassigned";
+      const who = it.assignee && it.assignee.trim() ? it.assignee : "Unassigned";
       if (!m.has(who)) m.set(who, []);
       m.get(who)!.push(it);
     }
@@ -292,8 +278,7 @@ export default function SprintPage(): JSX.Element {
     const mp = new Map<string, number>();
     if (!data?.issues) return mp;
     for (const it of data.issues) {
-      const who =
-        it.assignee && it.assignee.trim() ? it.assignee : "Unassigned";
+      const who = it.assignee && it.assignee.trim() ? it.assignee : "Unassigned";
       const pts = typeof it.storyPoints === "number" ? it.storyPoints : 0;
       mp.set(who, (mp.get(who) ?? 0) + pts);
     }
@@ -322,31 +307,25 @@ export default function SprintPage(): JSX.Element {
     "#93c5fd",
   ];
 
-  // ---- UI bits ----
   const kpiCards = useMemo(() => {
     if (!data) return [];
     return [
       { label: "Committed SP", value: data.kpis.committedSP },
       { label: "Scope Added SP", value: data.kpis.scopeAddedSP },
       { label: "Scope Removed SP", value: data.kpis.scopeRemovedSP },
-
       { label: "Dev Completed SP", value: data.kpis.devCompletedSP },
       { label: "Dev Remaining SP", value: data.kpis.devRemainingSP },
       { label: "Dev Completion %", value: data.kpis.devCompletionPct },
-
       { label: "Complete Completed SP", value: data.kpis.completeCompletedSP },
       { label: "Complete Remaining SP", value: data.kpis.completeRemainingSP },
       { label: "Complete %", value: data.kpis.completeCompletionPct },
-
       { label: "Tickets in QA", value: data.ticketsInQA ?? 0 },
-
-      // totals for PR lines across sprint
       { label: "PR Lines Added", value: data.kpis.totalPRAdditions ?? 0 },
       { label: "PR Lines Deleted", value: data.kpis.totalPRDeletions ?? 0 },
     ];
   }, [data]);
 
-  // UPDATED: fetch with streaming progress (SSE). Falls back to JSON fetch if SSE fails.
+  // Fetch with streaming progress (SSE). Falls back to JSON fetch if it fails.
   async function fetchStats(): Promise<void> {
     if (!sprintId) {
       setError("Pick a sprint");
@@ -357,17 +336,13 @@ export default function SprintPage(): JSX.Element {
     setPct(0);
     setStage("Starting…");
 
-    // Clean up a previous stream if any
     if (esRef.current) {
       esRef.current.close();
       esRef.current = null;
     }
 
     try {
-      // Prefer streaming endpoint for progress
-      const es = new EventSource(
-        `/api/sprint-stats/stream?sprintId=${encodeURIComponent(sprintId)}`
-      );
+      const es = new EventSource(`/api/sprint-stats/stream?sprintId=${encodeURIComponent(sprintId)}`);
       esRef.current = es;
 
       let gotResult = false;
@@ -393,12 +368,11 @@ export default function SprintPage(): JSX.Element {
             esRef.current = null;
           }
         } catch {
-          // ignore malformed chunks
+          /* ignore malformed chunks */
         }
       };
 
       es.onerror = () => {
-        // If the stream failed before completion, fall back to the non-streaming endpoint
         if (!gotResult) {
           es.close();
           esRef.current = null;
@@ -406,16 +380,13 @@ export default function SprintPage(): JSX.Element {
         }
       };
     } catch {
-      // If EventSource is not available, use plain fetch
       await fallbackFetch();
     }
   }
 
   async function fallbackFetch() {
     try {
-      const resp = await fetch(
-        `/api/sprint-stats?sprintId=${encodeURIComponent(sprintId)}`
-      );
+      const resp = await fetch(`/api/sprint-stats?sprintId=${encodeURIComponent(sprintId)}`);
       if (!resp.ok) throw new Error(await resp.text());
       const json: SprintStatsResponse = await resp.json();
       setData(json);
@@ -430,7 +401,6 @@ export default function SprintPage(): JSX.Element {
   }
 
   useEffect(() => {
-    // Auto-load sprints if an env board id is configured on the server side
     loadSprints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -445,7 +415,7 @@ export default function SprintPage(): JSX.Element {
   }
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24, color: t.appFg }}>
       <header
         style={{
           display: "flex",
@@ -454,7 +424,7 @@ export default function SprintPage(): JSX.Element {
           marginBottom: 16,
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Sprint Dashboard</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Sprint Dashboard</h1>
       </header>
 
       {/* Controls */}
@@ -468,21 +438,21 @@ export default function SprintPage(): JSX.Element {
         }}
       >
         <div>
-          <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 12, display: "block", marginBottom: 4, color: t.muted }}>
             Jira Board ID
           </label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={boardId}
-              onChange={(e) => {
-                setBoardId(e.target.value);
-              }}
+              onChange={(e) => setBoardId(e.target.value)}
               placeholder="e.g., 126 for PE, 97 for PC"
               style={{
                 flex: 1,
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: `1px solid ${t.border}`,
+                background: t.cardBg,
+                color: t.appFg,
                 textAlign: "right",
               }}
             />
@@ -490,12 +460,14 @@ export default function SprintPage(): JSX.Element {
               onClick={() => void loadSprints()}
               disabled={!boardId || loadingSprints}
               style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: 0,
-                background: "#111",
-                color: "#fff",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: `1px solid ${t.border}`,
+                background: t.cardBg,
+                color: t.cardFg,
+                boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
                 opacity: !boardId || loadingSprints ? 0.6 : 1,
+                cursor: !boardId || loadingSprints ? "not-allowed" : "pointer",
               }}
             >
               {loadingSprints ? "Loading…" : "Load"}
@@ -504,14 +476,13 @@ export default function SprintPage(): JSX.Element {
         </div>
 
         <div>
-          <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 12, display: "block", marginBottom: 4, color: t.muted }}>
             Sprint
           </label>
           <SearchableSelect
             items={sprintOptions}
             value={sprintId}
             onChange={setSprintId}
-            style={{ backgroundColor: "black" }}
             placeholder={loadingSprints ? "Loading sprints…" : "Search sprint…"}
             disabled={loadingSprints || sprintOptions.length === 0}
           />
@@ -523,12 +494,15 @@ export default function SprintPage(): JSX.Element {
             disabled={!sprintId || loading}
             style={{
               width: "100%",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: 0,
-              background: "#111",
-              color: "#fff",
+              padding: "12px 14px",
+              borderRadius: 10,
+              border: `1px solid ${t.border}`,
+              background: t.cardBg,
+              color: t.cardFg,
+              boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
               opacity: !sprintId || loading ? 0.6 : 1,
+              cursor: !sprintId || loading ? "not-allowed" : "pointer",
+              fontWeight: 700,
             }}
           >
             {loading ? "Loading…" : "Fetch"}
@@ -536,12 +510,22 @@ export default function SprintPage(): JSX.Element {
         </div>
       </div>
 
-      <div
-        style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}
-      >
-        <button onClick={fetchStats} disabled={loading || !sprintId}>
+      {/* Optional quick actions */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+        {/* <button
+          onClick={fetchStats}
+          disabled={loading || !sprintId}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: `1px solid ${t.border}`,
+            background: t.surface,
+            color: t.appFg,
+            opacity: loading || !sprintId ? 0.6 : 1,
+          }}
+        >
           Fetch
-        </button>
+        </button> */}
         {loading && (
           <button
             onClick={() => {
@@ -550,7 +534,13 @@ export default function SprintPage(): JSX.Element {
               setLoading(false);
               setStage("Canceled");
             }}
-            style={{ opacity: 0.8 }}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: `1px solid ${t.border}`,
+              background: "transparent",
+              color: t.muted,
+            }}
           >
             Cancel
           </button>
@@ -559,25 +549,20 @@ export default function SprintPage(): JSX.Element {
 
       {/* Progress UI */}
       {loading && (
-        <div style={{ marginTop: 10, maxWidth: 560 }}>
-          <div style={{ height: 10, background: "#eee", borderRadius: 8 }}>
+        <div style={{ marginTop: 12, maxWidth: 560 }}>
+          <div style={{ height: 10, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8 }}>
             <div
               style={{
                 height: 10,
                 width: `${pct}%`,
-                background: "#3b82f6",
+                background: palette.progress,
                 borderRadius: 8,
                 transition: "width 200ms linear",
               }}
             />
           </div>
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: 6,
-              fontSize: 12,
-            }}
+            style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, color: t.muted }}
           >
             <span>{stage}</span>
             <span>{pct}%</span>
@@ -587,12 +572,33 @@ export default function SprintPage(): JSX.Element {
 
       {/* Warnings / errors */}
       {!!error && (
-        <div style={{ marginTop: 10, color: "#b91c1c" }}>{error}</div>
+        <div
+          style={{
+            marginTop: 10,
+            border: `1px solid ${t.border}`,
+            background: "rgba(239, 68, 68, 0.12)",
+            color: "#b91c1c",
+            padding: 10,
+            borderRadius: 10,
+          }}
+        >
+          {error}
+        </div>
       )}
       {!!warnings?.length && (
         <div style={{ marginTop: 10 }}>
           {warnings.map((w, i) => (
-            <div key={i} style={{ color: "#92400e" }}>
+            <div
+              key={i}
+              style={{
+                color: "#92400e",
+                background: "rgba(245, 158, 11, 0.12)",
+                border: `1px solid ${t.border}`,
+                padding: 8,
+                borderRadius: 8,
+                marginBottom: 6,
+              }}
+            >
               ⚠️ {w}
             </div>
           ))}
@@ -615,21 +621,16 @@ export default function SprintPage(): JSX.Element {
               <div
                 key={k.label}
                 style={{
-                  background: palette.cardBg,
-                  color: palette.cardFg,
+                  background: t.cardBg,
+                  color: t.cardFg,
                   borderRadius: 12,
                   padding: 12,
-                  border: `1px solid ${palette.cardBr}`,
+                  border: `1px solid ${t.cardBr}`,
+                  boxShadow: "0 2px 14px rgba(0,0,0,0.12)",
                 }}
               >
-                <div
-                  style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}
-                >
-                  {k.label}
-                </div>
-                <div
-                  style={{ fontSize: 18, fontWeight: 700, textAlign: "right" }}
-                >
+                <div style={{ fontSize: 12, color: t.muted, marginBottom: 6 }}>{k.label}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, textAlign: "right" }}>
                   <Num v={k.value} />
                 </div>
               </div>
@@ -648,36 +649,24 @@ export default function SprintPage(): JSX.Element {
             {/* Burn chart */}
             <div
               style={{
-                background: "#0b0b0b",
+                background: t.cardBg,
+                color: t.cardFg,
                 borderRadius: 12,
                 padding: 16,
-                boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
+                border: `1px solid ${t.cardBr}`,
+                boxShadow: "0 2px 14px rgba(0,0,0,0.12)",
               }}
             >
-              <h2
-                style={{ fontWeight: 600, marginBottom: 8, color: "#e5e7eb" }}
-              >
-                Sprint Burn
-              </h2>
+              <h2 style={{ fontWeight: 700, marginBottom: 8 }}>Sprint Burn</h2>
               <div style={{ width: "100%", height: 340 }}>
                 <ResponsiveContainer>
-                  <LineChart
-                    data={data.burn}
-                    margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
-                  >
-                    <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
-                    <XAxis dataKey="date" stroke="#94a3b8" tickMargin={8} />
-                    <YAxis stroke="#94a3b8" allowDecimals={false} />
+                  <LineChart data={data.burn} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                    <XAxis dataKey="date" stroke={t.muted} tickMargin={8} />
+                    <YAxis stroke={t.muted} allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="devRemaining"
-                      name="Dev Remaining"
-                      stroke="#60a5fa"
-                      dot={false}
-                      strokeWidth={2}
-                    />
+                    <Line type="monotone" dataKey="devRemaining" name="Dev Remaining" stroke="#60a5fa" dot={false} strokeWidth={2} />
                     <Line
                       type="monotone"
                       dataKey="completeRemaining"
@@ -694,17 +683,15 @@ export default function SprintPage(): JSX.Element {
             {/* Pie: SP distribution by assignee */}
             <div
               style={{
-                background: "#0b0b0b",
+                background: t.cardBg,
+                color: t.cardFg,
                 borderRadius: 12,
                 padding: 16,
-                boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
+                border: `1px solid ${t.cardBr}`,
+                boxShadow: "0 2px 14px rgba(0,0,0,0.12)",
               }}
             >
-              <h2
-                style={{ fontWeight: 600, marginBottom: 8, color: "#e5e7eb" }}
-              >
-                Story Points by Assignee
-              </h2>
+              <h2 style={{ fontWeight: 700, marginBottom: 8 }}>Story Points by Assignee</h2>
               <div style={{ width: "100%", height: 340 }}>
                 <ResponsiveContainer>
                   <PieChart>
@@ -718,10 +705,7 @@ export default function SprintPage(): JSX.Element {
                       label={(p: PieLabelRenderProps) => String(p.value)}
                     >
                       {pieData.map((_, idx) => (
-                        <Cell
-                          key={idx}
-                          fill={pieColors[idx % pieColors.length]}
-                        />
+                        <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -732,20 +716,20 @@ export default function SprintPage(): JSX.Element {
             </div>
           </div>
 
-          {/* Completed by Assignee – cards with collapsible ticket timelines */}
+          {/* Completed by Assignee */}
           {data.completedByAssignee && data.completedByAssignee.length > 0 && (
             <div
               style={{
-                background: "#fff",
+                background: t.surface,
+                color: t.appFg,
                 borderRadius: 12,
                 padding: 16,
+                border: `1px solid ${t.border}`,
+                boxShadow: "0 2px 14px rgba(0,0,0,0.08)",
                 marginBottom: 16,
-                boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
               }}
             >
-              <h2 style={{ fontWeight: 600, marginBottom: 8 }}>
-                Completed by Assignee
-              </h2>
+              <h2 style={{ fontWeight: 700, marginBottom: 8 }}>Completed by Assignee</h2>
               <div
                 style={{
                   display: "grid",
@@ -757,43 +741,11 @@ export default function SprintPage(): JSX.Element {
                   const name = row.assignee;
                   const items = issuesByAssignee.get(name) ?? [];
 
-                  // per-assignee LOC (sum of parent ticket PR additions + deletions)
                   const locChanged = items.reduce(
-                    (acc, it) =>
-                      acc + (it.prAdditions ?? 0) + (it.prDeletions ?? 0),
+                    (acc, it) => acc + (it.prAdditions ?? 0) + (it.prDeletions ?? 0),
                     0
                   );
-
-                  // NEW: total review comments for this assignee
-                  const reviewComments = items.reduce(
-                    (acc, it) => acc + (it.prReviewComments ?? 0),
-                    0
-                  );
-
-                  // NEW: assigned SP regardless of status
-                  const assignedSP = items.reduce(
-                    (acc, it) => acc + (it.storyPoints ?? 0),
-                    0
-                  );
-
-                  // NEW: average cycle time / SP (ToDo/Created → Review)
-                  let hoursSum = 0;
-                  let spSumForCycle = 0;
-                  for (const it of items) {
-                    const sp = it.storyPoints ?? 0;
-                    if (
-                      sp > 0 &&
-                      it.todoToReviewHours !== null &&
-                      it.todoToReviewHours !== undefined
-                    ) {
-                      hoursSum += it.todoToReviewHours!;
-                      spSumForCycle += sp;
-                    }
-                  }
-                  const avgHoursPerSP: number | null =
-                    spSumForCycle > 0 ? hoursSum / spSumForCycle : null;
-
-                  // LOC per SP
+                  const assignedSP = items.reduce((acc, it) => acc + (it.storyPoints ?? 0), 0);
                   const locPerSP = assignedSP > 0 ? locChanged / assignedSP : 0;
 
                   const isOpen = openAssignees.has(name);
@@ -801,11 +753,12 @@ export default function SprintPage(): JSX.Element {
                     <div
                       key={name}
                       style={{
-                        border: `1px solid ${palette.cardBr}`,
+                        border: `1px solid ${t.cardBr}`,
                         borderRadius: 12,
                         padding: 12,
-                        background: palette.cardBg,
-                        color: palette.cardFg,
+                        background: t.cardBg,
+                        color: t.cardFg,
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
                       }}
                     >
                       <div
@@ -816,240 +769,51 @@ export default function SprintPage(): JSX.Element {
                           gap: 8,
                         }}
                       >
-                        <div style={{ fontWeight: 700 }}>{name}</div>
+                        <div style={{ fontWeight: 800 }}>{name}</div>
                         <button
                           onClick={() => toggleAssignee(name)}
                           style={{
-                            border: `1px solid ${palette.cardBr}`,
+                            border: `1px solid ${t.cardBr}`,
                             borderRadius: 8,
                             padding: "6px 10px",
-                            background: "#111827",
-                            color: palette.cardFg,
+                            background: t.surface,
+                            color: t.cardFg,
                             cursor: "pointer",
                           }}
                         >
-                          {isOpen
-                            ? `Hide tickets (${items.length})`
-                            : `Show tickets (${items.length})`}
+                          {isOpen ? `Hide tickets (${items.length})` : `Show tickets (${items.length})`}
                         </button>
                       </div>
 
-                      {/* NEW: summary cards (Dev, Dev+QA, LOC Changed, Assigned SP, Avg Cycle/LOC per SP, Review Cmts) */}
+                      {/* three quick stats */}
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "1.3fr 1.3fr 1.3fr",
+                          gridTemplateColumns: "repeat(3, 1fr)",
                           gap: 8,
                           marginTop: 10,
                         }}
                       >
-                        <div
-                          style={{
-                            background: "rgba(59,130,246,0.18)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(59,130,246,0.45)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#93c5fd",
-                              marginBottom: 2,
-                            }}
-                          >
-                            (Dev) Completed
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 800,
-                              textAlign: "right",
-                            }}
-                          >
-                            {row.devPoints}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            background: "rgba(34,197,94,0.18)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(34,197,94,0.45)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#86efac",
-                              marginBottom: 2,
-                            }}
-                          >
-                            (Dev + QA) Completed
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 800,
-                              textAlign: "right",
-                            }}
-                          >
-                            {row.completePoints}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            background: "rgba(148,163,184,0.18)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(148,163,184,0.45)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#cbd5e1",
-                              marginBottom: 2,
-                            }}
-                          >
-                            LOC Changed
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 800,
-                              textAlign: "right",
-                              marginTop: 20,
-                            }}
-                          >
-                            <Num v={locChanged} />
-                          </div>
-                        </div>{" "}
+                        <MiniStat label="(Dev) Completed" value={row.devPoints} tint={palette.progress} />
+                        <MiniStat label="(Dev + QA) Completed" value={row.completePoints} tint={palette.done} />
+                        <MiniStat label="LOC Changed" value={locChanged} tint={palette.todo} />
                       </div>
 
-                      {/* NEW: summary cards (Dev, Dev+QA, LOC Changed, Assigned SP, Avg Cycle/LOC per SP, Review Cmts) */}
+                      {/* SP & ratios */}
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "1.5fr 1.5fr",
+                          gridTemplateColumns: "repeat(2, 1fr)",
                           gap: 8,
                           marginTop: 10,
                         }}
                       >
-                        {/* Assigned SP */}
-                        <div
-                          style={{
-                            background: "rgba(99,102,241,0.18)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(99,102,241,0.4)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#c7d2fe",
-                              marginBottom: 2,
-                            }}
-                          >
-                            Assigned SP
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 800,
-                              textAlign: "right",
-                            }}
-                          >
-                            <Num v={assignedSP} />
-                          </div>
-                        </div>
-
-                        {/* Two-part: Avg Cycle / SP + LOC / SP */}
-                        <div
-                          style={{
-                            background: "rgba(99,102,241,0.08)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(99,102,241,0.3)",
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: 8,
-                          }}
-                        >
-                          {/* <div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "#a5b4fc",
-                                marginBottom: 2,
-                              }}
-                            >
-                              Avg Cycle / SP
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 18,
-                                fontWeight: 800,
-                                textAlign: "right",
-                              }}
-                            >
-                              {avgHoursPerSP !== null ? (
-                                <Hrs v={avgHoursPerSP} />
-                              ) : (
-                                <span>—</span>
-                              )}
-                            </div>
-                          </div> */}
-                          <div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "#a5b4fc",
-                                marginBottom: 2,
-                              }}
-                            >
-                              LOC / SP
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 18,
-                                fontWeight: 800,
-                                textAlign: "right",
-                              }}
-                            >
-                              {assignedSP > 0 ? locPerSP.toFixed(1) : "—"}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Review comments (total) */}
-                        {/* <div
-                          style={{
-                            background: "rgba(20,184,166,0.12)",
-                            borderRadius: 8,
-                            padding: 10,
-                            border: "1px solid rgba(20,184,166,0.35)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#99f6e4",
-                              marginBottom: 2,
-                            }}
-                          >
-                            Review Cmts
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 800,
-                              textAlign: "right",
-                            }}
-                          >
-                            <Num v={reviewComments} />
-                          </div>
-                        </div> */}
+                        <MiniStat label="Assigned SP" value={assignedSP} tint={palette.story} />
+                        <MiniStat
+                          label="LOC / SP"
+                          value={assignedSP > 0 ? Number(locPerSP.toFixed(1)) : 0}
+                          tint={palette.story}
+                        />
                       </div>
 
                       {/* Collapsible ticket timelines */}
@@ -1079,7 +843,25 @@ export default function SprintPage(): JSX.Element {
   );
 }
 
-/* ===================== Ticket Timeline UI ===================== */
+/* ===================== Little helpers ===================== */
+function MiniStat({ label, value, tint }: { label: string; value?: number; tint: string }) {
+  return (
+    <div
+      style={{
+        background: `rgba(${hexToRgb(tint)}, 0.10)`,
+        borderRadius: 10,
+        padding: 10,
+        border: `1px solid rgba(${hexToRgb(tint)}, 0.35)`,
+      }}
+    >
+      <div style={{ fontSize: 12, color: t.muted, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, textAlign: "right" }}>
+        <Num v={value ?? 0} />
+      </div>
+    </div>
+  );
+}
+
 function Dot({ color, active }: { color: string; active: boolean }) {
   return (
     <div
@@ -1120,16 +902,7 @@ function Step({
   compact?: boolean;
 }) {
   const icon =
-    label === "To Do"
-      ? "📋"
-      : label === "In Progress"
-      ? "🔧"
-      : label === "Review"
-      ? "👀"
-      : label === "Approved"
-      ? "✅"
-      : "•";
-
+    label === "To Do" ? "📋" : label === "In Progress" ? "🔧" : label === "Review" ? "👀" : label === "Approved" ? "✅" : "•";
   const parts = centralParts(date);
 
   return (
@@ -1146,42 +919,18 @@ function Step({
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <Dot color={color} active={active} />
       </div>
-
       {compact ? (
         <>
-          <div
-            style={{ fontSize: 14, marginTop: 6, color, textAlign: "center" }}
-          >
-            {icon}
-          </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: palette.faint,
-              textAlign: "center",
-              lineHeight: 1.15,
-              marginTop: 2,
-            }}
-          >
+          <div style={{ fontSize: 14, marginTop: 6, color, textAlign: "center" }}>{icon}</div>
+          <div style={{ fontSize: 10, color: t.muted, textAlign: "center", lineHeight: 1.15, marginTop: 2 }}>
             <div>{parts.date}</div>
             <div>{parts.timeTz}</div>
           </div>
         </>
       ) : (
         <>
-          <div
-            style={{ fontSize: 11, marginTop: 6, color, textAlign: "right" }}
-          >
-            {label}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: palette.faint,
-              textAlign: "right",
-              lineHeight: 1.15,
-            }}
-          >
+          <div style={{ fontSize: 11, marginTop: 6, color, textAlign: "right" }}>{label}</div>
+          <div style={{ fontSize: 11, color: t.muted, textAlign: "right", lineHeight: 1.15 }}>
             <div>{parts.date}</div>
             <div>{parts.timeTz}</div>
           </div>
@@ -1195,14 +944,14 @@ function StatCard({ label, value }: { label: string; value?: number }) {
   return (
     <div
       style={{
-        background: "#0b1220",
-        border: "1px solid rgba(148,163,184,0.35)",
+        background: t.surface,
+        border: `1px solid ${t.cardBr}`,
         borderRadius: 8,
         padding: "6px 8px",
         minWidth: 90,
       }}
     >
-      <div style={{ fontSize: 11, color: "#93a3b8" }}>{label}</div>
+      <div style={{ fontSize: 11, color: t.muted }}>{label}</div>
       <div style={{ fontSize: 16, fontWeight: 700, textAlign: "right" }}>
         <Num v={value ?? 0} />
       </div>
@@ -1236,14 +985,30 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
     return () => ro.disconnect();
   }, []);
 
+  // make status class slug so CSS in globals.css like ".in-progress-card" applies
+    const sg = statusGroup(issue.status);
+    const statusSlug =
+      sg === "other"
+        ? toSlug(issue.status)
+        : toSlug(
+            {
+              todo: "todo",
+              progress: "in-progress",
+              review: "review",
+              done: "done",
+              blocked: "impeded",
+            }[sg]
+          );
+
   return (
     <div
       style={{
-        border: `1px solid ${palette.cardBr}`,
-        borderRadius: 10,
-        padding: 10,
+        border: `1px solid ${t.cardBr}`,
+        borderRadius: 12,
+        padding: 12,
+        background: t.surface,
       }}
-        className={`${issue.status?.toLowerCase()}-card`}
+      className={`${statusSlug}-card`}
     >
       {/* header */}
       <div
@@ -1265,19 +1030,14 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
             flexWrap: "wrap",
           }}
         >
-          <a
-            href={issue.url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ fontWeight: 700, color: "#bfdbfe" }}
-          >
+          <a href={issue.url} target="_blank" rel="noreferrer" style={{ fontWeight: 800, color: t.link }}>
             {issue.key}
           </a>
           <Pill bg={typeSty.bg} br={typeSty.br}>
             {issue.issueType ?? "Ticket"}
           </Pill>
           {typeof issue.storyPoints === "number" && (
-            <Pill bg="rgba(99,102,241,0.18)" br="rgba(99,102,241,0.4)">
+            <Pill bg={`rgba(${hexToRgb(palette.story)}, 0.14)`} br={`rgba(${hexToRgb(palette.story)}, 0.35)`}>
               {issue.storyPoints} SP
             </Pill>
           )}
@@ -1301,7 +1061,6 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
       >
         <StatCard label="Lines Added" value={issue.prAdditions ?? 0} />
         <StatCard label="Lines Deleted" value={issue.prDeletions ?? 0} />
-        {/* NEW: review comments per ticket */}
         <StatCard label="Review Cmts" value={issue.prReviewComments ?? 0} />
       </div>
 
@@ -1316,37 +1075,13 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
           overflow: "visible",
         }}
       >
-        <Step
-          label="To Do"
-          date={todoAt}
-          color={palette.todo}
-          active={!!todoAt}
-          compact={compact}
-        />
+        <Step label="To Do" date={todoAt} color={palette.todo} active={!!todoAt} compact={compact} />
         <Connector color={palette.progress} active={hasProg} />
-        <Step
-          label="In Progress"
-          date={inProg}
-          color={palette.progress}
-          active={hasProg}
-          compact={compact}
-        />
+        <Step label="In Progress" date={inProg} color={palette.progress} active={hasProg} compact={compact} />
         <Connector color={palette.review} active={hasReview} />
-        <Step
-          label="Review"
-          date={revAt}
-          color={palette.review}
-          active={hasReview}
-          compact={compact}
-        />
+        <Step label="Review" date={revAt} color={palette.review} active={hasReview} compact={compact} />
         <Connector color={palette.done} active={hasDone} />
-        <Step
-          label="Approved"
-          date={compAt}
-          color={palette.done}
-          active={hasDone}
-          compact={compact}
-        />
+        <Step label="Approved" date={compAt} color={palette.done} active={hasDone} compact={compact} />
       </div>
 
       {/* durations */}
@@ -1359,13 +1094,13 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
           justifyContent: "flex-end",
         }}
       >
-        <Pill bg="rgba(59,130,246,0.18)" br="rgba(59,130,246,0.45)">
+        <Pill bg={`rgba(${hexToRgb(palette.progress)}, 0.14)`} br={`rgba(${hexToRgb(palette.progress)}, 0.35)`}>
           In Progress → Review:
           <span style={{ fontWeight: 700, marginLeft: 4 }}>
             <Hrs v={issue.inProgressToReviewHours} />
           </span>
         </Pill>
-        <Pill bg="rgba(139,92,246,0.18)" br="rgba(139,92,246,0.45)">
+        <Pill bg={`rgba(${hexToRgb(palette.review)}, 0.14)`} br={`rgba(${hexToRgb(palette.review)}, 0.35)`}>
           Review → Approved:
           <span style={{ fontWeight: 700, marginLeft: 4 }}>
             <Hrs v={issue.reviewToCompleteHours} />
@@ -1374,9 +1109,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
       </div>
 
       {/* summary */}
-      <div style={{ marginTop: 8, fontSize: 13, color: "#e2e8f0" }}>
-        {issue.summary}
-      </div>
+      <div style={{ marginTop: 8, fontSize: 13, color: t.appFg }}>{issue.summary}</div>
     </div>
   );
 }
