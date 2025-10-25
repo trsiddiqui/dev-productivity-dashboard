@@ -2,14 +2,14 @@ import type { JiraIssue, PR, TimeseriesItem, PRLifecycle, LifecycleStats } from 
 import { eachDayOfInterval, formatISO } from 'date-fns';
 
 export function aggregateDaily(params: {
-  from: string; // YYYY-MM-DD
-  to: string;   // YYYY-MM-DD
+  from: string;
+  to: string;
   prs: PR[];
   jiraIssues: JiraIssue[];
 }): TimeseriesItem[] {
   const { from, to, prs, jiraIssues } = params;
 
-  // Seed every day to zero
+
   const days = eachDayOfInterval({ start: new Date(from), end: new Date(to) });
   const map = new Map<string, TimeseriesItem>();
   for (const d of days) {
@@ -17,7 +17,7 @@ export function aggregateDaily(params: {
     map.set(k, { date: k, prCount: 0, additions: 0, deletions: 0, tickets: 0, storyPoints: 0 });
   }
 
-  // PRs → bucket by CREATED date now
+
   for (const p of prs) {
     const k = (p.createdAt ?? '').slice(0, 10);
     if (!map.has(k)) continue;
@@ -27,7 +27,7 @@ export function aggregateDaily(params: {
     row.deletions += p.deletions ?? 0;
   }
 
-  // Tickets → keep using resolution date if available, otherwise skip
+
   for (const t of jiraIssues) {
     const k = (t.resolutiondate ?? '').slice(0, 10);
     if (!k || !map.has(k)) continue;
@@ -56,7 +56,7 @@ function median(nums: number[]): number | null {
 
 export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: LifecycleStats } {
   const items: PRLifecycle[] = prs.map(p => {
-    const readyAt = p.readyForReviewAt ?? (p.isDraft ? null : p.createdAt); // if never draft, treat created as ready
+    const readyAt = p.readyForReviewAt ?? (p.isDraft ? null : p.createdAt);
     const firstRev = p.firstReviewAt ?? null;
     const mergedAt = p.mergedAt ?? null;
     const closedAt = p.closedAt ?? null;
@@ -75,7 +75,7 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
       state: p.state,
       isDraft: p.isDraft,
 
-      // carry LOC deltas into lifecycle rows
+
       additions: p.additions,
       deletions: p.deletions,
 

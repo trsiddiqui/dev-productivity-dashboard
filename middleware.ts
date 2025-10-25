@@ -1,10 +1,10 @@
-// middleware.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'dpd_auth';
 const SECRET = process.env.AUTH_SECRET || 'dev-change-me';
 
-// Minimal verify (same HMAC format as lib/auth.ts): username|hex(hmac(username))
+
 async function verifyToken(token?: string | null): Promise<boolean> {
   if (!token) return false;
   const idx = token.lastIndexOf('|');
@@ -29,7 +29,7 @@ const PUBLIC_PATHS = new Set([
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  // Allow Next internals & static
+
   if (pathname.startsWith('/_next') || pathname.startsWith('/assets') || pathname.startsWith('/images')) {
     return NextResponse.next();
   }
@@ -38,7 +38,7 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
   const ok = await verifyToken(token);
 
-  // Protect API routes with 401
+
   if (pathname.startsWith('/api/')) {
     if (!ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -46,7 +46,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Protect pages → redirect to /login
+
   if (!ok) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
@@ -54,7 +54,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Optional: keep logged-in users away from /login
+
   if (pathname === '/') {
     const url = req.nextUrl.clone();
     url.pathname = '/';

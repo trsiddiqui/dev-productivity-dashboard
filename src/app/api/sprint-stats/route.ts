@@ -6,6 +6,7 @@ import {
   getIssuePhaseTimes,
   getJiraIssuePRs,
   getJiraSubtaskIds,
+  getQAAssignmentTimesAll,
 } from '@/lib/jira';
 import { getGithubPRStatsByUrls } from '@/lib/github';
 import type {
@@ -18,11 +19,12 @@ import type {
 } from '@/lib/types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 import { requireAuthOr401 } from '@/lib/auth';
+import { cfg } from '@/lib/config'; // NEW
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Status name groups */
+
 const TODO_STATUS_NAMES = ['To Do', 'Impeded', 'Open', 'Backlog', 'Selected for Development'];
 const INPROGRESS_STATUS_NAMES = ['In Progress', 'Merged', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'];
 const QA_STATUS_NAMES = ['Reviewed', 'Review', 'In Review'];
@@ -30,7 +32,7 @@ const COMPLETE_STATUS_NAMES = ['Done', 'Approved'];
 
 const REVIEW_SET = new Set(QA_STATUS_NAMES.map((s) => s.toLowerCase()));
 
-/** Helpers */
+
 const toDateOnly = (iso?: string): string | undefined => (iso ? iso.slice(0, 10) : undefined);
 const dayKey = (d: Date): string => formatISO(d, { representation: 'date' });
 const diffHours = (a?: string, b?: string): number | null => {
@@ -63,37 +65,66 @@ export async function GET(req: Request) {
     }
     const sprintId = Number(sprintIdStr);
 
-    // Sprint meta
+
     const meta = await getJiraSprintMeta(sprintId);
     if (!meta) {
       return NextResponse.json({ error: 'Sprint not found' }, { status: 404 });
     }
 
-    // Issues in the sprint
+
     const issues: JiraIssue[] = await getJiraSprintIssues(sprintId);
 
-    // Phase timestamps via changelog (To Do / In Progress / Review / Approved)
+
     const phaseTimes = await getIssuePhaseTimes(
       issues.map((i) => i.key),
       { todo: TODO_STATUS_NAMES, inProgress: INPROGRESS_STATUS_NAMES, review: QA_STATUS_NAMES, complete: COMPLETE_STATUS_NAMES }
     );
 
-    // Merge phase times + durations into issues
-    // NOTE: some tickets transition straight to Approved/Done without ever hitting a "review" status.
-    // In that case treat the complete timestamp as the review timestamp so "Dev Completed" reflects
-    // work that effectively finished development even if the explicit review status wasn't used.
+
     for (const it of issues) {
       const p = phaseTimes[it.key] ?? {};
       it.todoAt = p.todo;
       it.inProgressAt = p.inProgress;
-      // fallback: if no explicit review timestamp, use complete timestamp so dev-completed includes it
+
       it.reviewAt = p.review ?? p.complete;
       it.completeAt = p.complete;
       it.inProgressToReviewHours = diffHours(p.inProgress, p.review ?? p.complete);
       it.reviewToCompleteHours = diffHours(p.review ?? p.complete, p.complete);
     }
 
-    // === NEW: Dev-status PR aggregation (parent + subtasks) ===
+
+    try {
+      if (cfg.jiraQAAssigneeField) {
+        const rows = issues
+          .filter(i => (i.qaAssignees?.length ?? 0) > 0)
+          .map(i => ({ key: i.key, qa: i.qaAssignees! }));
+
+        const qaAssignTimes = await getQAAssignmentTimesAll(rows, cfg.jiraQAAssigneeField);
+
+        for (const it of issues) {
+          if (!it.qaAssignees?.length) continue;
+          it.qaAssignedAtMap = qaAssignTimes[it.key] ?? {};
+          it.qaReviewToCompleteHoursByQA = it.qaReviewToCompleteHoursByQA ?? {};
+          for (const qa of it.qaAssignees) {
+            const qaKey = qa.id ? `id:${qa.id}` : `name:${(qa.name ?? '').trim().toLowerCase()}`;
+            const reviewStart = it.reviewAt ?? it.completeAt;
+            if (!it.completeAt || !reviewStart) {
+              it.qaReviewToCompleteHoursByQA[qaKey] = null;
+              continue;
+            }
+            const assignAt = it.qaAssignedAtMap?.[qaKey];
+            const start = assignAt && new Date(assignAt).getTime() > new Date(reviewStart).getTime()
+              ? assignAt
+              : reviewStart;
+            it.qaReviewToCompleteHoursByQA[qaKey] = diffHours(start, it.completeAt);
+          }
+        }
+      }
+    } catch {
+      warnings.push('QA assignment times unavailable (insufficient Jira permissions or missing JIRA_QA_ASSIGNEE_FIELD).');
+    }
+
+
     try {
       const parents = issues.filter(
         i => ['story', 'bug', 'task'].includes((i.issueType ?? '').toLowerCase())
@@ -102,18 +133,18 @@ export async function GET(req: Request) {
       const parentKeyToIssue = new Map<string, JiraIssue>();
       parents.forEach(p => parentKeyToIssue.set(p.key, p));
 
-      // 1) subtask id lookup for parents
+
       const subtaskIdsByParentKey = await getJiraSubtaskIds(parents.map(p => p.key)).catch(() => ({} as Record<string, string[]>));
 
-      // 2) collect all issueIds to pull PRs for: parent ids + subtask ids
+
       const allIssueIds = new Set<string>();
       parents.forEach(p => allIssueIds.add(p.id));
       Object.values(subtaskIdsByParentKey).forEach(arr => arr.forEach(id => allIssueIds.add(id)));
 
-      // 3) dev-status PRs for those issueIds
+
       const prsByIssueId = await getJiraIssuePRs(Array.from(allIssueIds)).catch(() => ({} as Record<string, LinkedPR[]>));
 
-      // 4) gather unique PR urls per parent (self + subtasks)
+
       const allUrls = new Set<string>();
       const urlsByParentKey = new Map<string, string[]>();
 
@@ -130,14 +161,14 @@ export async function GET(req: Request) {
         urlsByParentKey.set(p.key, unique);
         unique.forEach(u => { if (u.includes('github.com')) allUrls.add(u); });
 
-        // keep raw links on the issue (nice to have)
+
         p.linkedPRs = [...own, ...childPRs];
       }
 
-      // 5) fetch LOC for all unique PR urls
+
       const statsByUrl = await getGithubPRStatsByUrls(Array.from(allUrls));
 
-      // 6) fold LOC totals into each parent issue
+
       for (const p of parents) {
         const urls = urlsByParentKey.get(p.key) ?? [];
         let add = 0;
@@ -156,7 +187,7 @@ export async function GET(req: Request) {
       warnings.push('PR → LOC aggregation unavailable (dev-status/permissions)');
     }
 
-    // Dates
+
     const start = meta.startDate ? new Date(meta.startDate) : null;
     const end = meta.endDate ? new Date(meta.endDate) : null;
     const now = new Date();
@@ -164,7 +195,7 @@ export async function GET(req: Request) {
     const sp = (it: JiraIssue): number =>
       typeof it.storyPoints === 'number' ? it.storyPoints : 0;
 
-    // Scope classification (committed vs added)
+
     let scopeByKey: Record<string, 'added' | 'removed' | 'committed'> = {};
     try {
       scopeByKey = await getJiraSprintScopeChanges(
@@ -178,7 +209,7 @@ export async function GET(req: Request) {
 
     let committedSP = 0;
     let addedSP = 0;
-    const removedSP = 0; // left as 0 unless tracking removals
+    const removedSP = 0;
 
     for (const it of issues) {
       const tag = scopeByKey[it.key] ?? 'committed';
@@ -198,7 +229,7 @@ export async function GET(req: Request) {
     const devRemainingSP = Math.max(0, totalScope - devCompletedSP);
     const completeRemainingSP = Math.max(0, totalScope - completeCompletedSP);
 
-    // Completed SP by assignee
+
     const byAssigneeDev = new Map<string, number>();
     const byAssigneeComplete = new Map<string, number>();
     for (const it of issues) {
@@ -220,13 +251,13 @@ export async function GET(req: Request) {
       }))
       .sort((a, b) => b.completePoints - a.completePoints || b.devPoints - a.devPoints);
 
-    // Tickets currently in QA (in a review status)
+
     const ticketsInQA = issues.reduce<number>((acc, it) => {
       const cur = (it.status ?? '').toLowerCase();
       return acc + (REVIEW_SET.has(cur) ? 1 : 0);
     }, 0);
 
-    // Burn series
+
     const burn: SprintBurnItem[] = [];
     if (start) {
       const endForSeries = end ?? now;
@@ -254,15 +285,16 @@ export async function GET(req: Request) {
       }
     }
 
-    // Forecast
+
     let devCompletionDate: string | undefined;
     let completeCompletionDate: string | undefined;
 
     if (burn.length > 0) {
-      const todayKey = dayKey(now);
+      const nowDt = now;
+      const todayKey = dayKey(nowDt);
       let todayIdx = burn.findIndex((b) => b.date === todayKey);
       if (todayIdx < 0) {
-        const idx = burn.findIndex((b) => new Date(b.date) > now);
+        const idx = burn.findIndex((b) => new Date(b.date) > nowDt);
         todayIdx = idx > 0 ? idx - 1 : burn.length - 1;
       }
 
@@ -306,7 +338,7 @@ export async function GET(req: Request) {
     const pct = (num: number, den: number): number =>
       den > 0 ? Number(((num / den) * 100).toFixed(1)) : 0;
 
-    // NEW: sprint totals for PR LOC
+
     const totalPRAdditions = issues.reduce((a, it) => a + (it.prAdditions ?? 0), 0);
     const totalPRDeletions = issues.reduce((a, it) => a + (it.prDeletions ?? 0), 0);
 
@@ -327,7 +359,6 @@ export async function GET(req: Request) {
       completeRemainingSP,
       completeCompletionPct: pct(completeCompletedSP, totalScope),
 
-      // NEW totals
       totalPRAdditions,
       totalPRDeletions,
     };

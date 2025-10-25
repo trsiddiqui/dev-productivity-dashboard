@@ -1,10 +1,10 @@
-// src/lib/auth.ts
+
 import { NextResponse } from 'next/server';
 
 export const COOKIE_NAME = 'dpd_auth';
 const SECRET = process.env.AUTH_SECRET || 'dev-change-me';
 
-// Parse USER_ACCOUNTS="u1:p1,u2:p2"
+
 export function loadAccounts(): Record<string, string> {
   const raw = process.env.USER_ACCOUNTS || '';
   const map: Record<string, string> = {};
@@ -28,7 +28,7 @@ export function verifyCredentials(username: string, password: string): boolean {
   return !!accounts[username] && accounts[username] === password;
 }
 
-/* --- HMAC (Edge & Node compatible via Web Crypto) --- */
+
 async function hmac(input: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -43,7 +43,7 @@ async function hmac(input: string): Promise<string> {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Token format: username|hex(hmac(username)) */
+
 export async function signToken(username: string): Promise<string> {
   const sig = await hmac(username);
   return `${username}|${sig}`;
@@ -59,7 +59,7 @@ export async function verifyToken(token?: string | null): Promise<string | null>
   return sig === expect ? username : null;
 }
 
-/** Set cookie on response */
+
 export async function setSessionCookie(res: NextResponse, username: string) {
   const token = await signToken(username);
   res.cookies.set(COOKIE_NAME, token, {
@@ -67,16 +67,16 @@ export async function setSessionCookie(res: NextResponse, username: string) {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 60 * 60 * 12, // 12h
+    maxAge: 60 * 60 * 12,
   });
 }
 
-/** Clear cookie */
+
 export function clearSessionCookie(res: NextResponse) {
   res.cookies.set(COOKIE_NAME, '', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 0 });
 }
 
-/** Extract and verify username from Request cookie */
+
 export async function userFromRequest(req: Request): Promise<string | null> {
   const cookie = req.headers.get('cookie') || '';
   const part = cookie.split(';').map(s => s.trim()).find(s => s.startsWith(`${COOKIE_NAME}=`));
@@ -85,7 +85,7 @@ export async function userFromRequest(req: Request): Promise<string | null> {
   return verifyToken(token);
 }
 
-/** Throw 401 if no user */
+
 export async function requireAuthOr401(req: Request): Promise<string | Response> {
   const user = await userFromRequest(req);
   if (!user) {

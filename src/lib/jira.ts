@@ -8,7 +8,7 @@ import type {
   LinkedPR,
 } from './types';
 
-/* ---------------- Existing search helpers ---------------- */
+
 
 interface JiraUser { accountId: string; displayName: string; emailAddress?: string }
 interface JiraStatus { name?: string }
@@ -58,7 +58,7 @@ async function runJQL(params: {
       body: JSON.stringify({ jql, fields, fieldsByKeys: true, maxResults, nextPageToken }),
     });
     console.log(`[API FETCH END] POST ${url} -> ${resp.status}`);
-      
+
     if (!resp.ok) {
       let detail = '';
       try {
@@ -69,7 +69,7 @@ async function runJQL(params: {
         ].filter(Boolean);
         detail = msgs.join('; ');
       } catch {
-        try { detail = await resp.text(); } catch { /* ignore */ }
+        try { detail = await resp.text(); } catch {  }
       }
       throw new Error(`JIRA enhanced search failed with ${resp.status}${detail ? `: ${detail}` : ''}`);
     }
@@ -80,8 +80,6 @@ async function runJQL(params: {
 
   return out;
 }
-
-/* ---------------- Projects ---------------- */
 
 export async function getJiraProjects(): Promise<JiraProjectLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
@@ -126,8 +124,6 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
   projects.sort((a, b) => a.name.localeCompare(b.name));
   return projects;
 }
-
-/* ---------------- Done issues (as before) ---------------- */
 
 export async function getJiraDoneIssues(params: {
   assignee: string;
@@ -217,8 +213,6 @@ export async function getJiraDoneIssues(params: {
   return Array.from(byId.values());
 }
 
-/* ---------------- Users ---------------- */
-
 export async function getJiraUsers(): Promise<JiraUserLite[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
   const base = normalizedBase();
@@ -268,8 +262,6 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
   return out;
 }
 
-/* ================== Agile / Sprint helpers (unchanged below where used) ================== */
-
 interface JiraSprintValue {
   id: number;
   name: string;
@@ -288,6 +280,7 @@ interface JiraAgileIssueFields {
   parent?: { key?: string };
   [key: string]: unknown;
 }
+
 interface JiraAgileIssue {
   id: string;
   key: string;
@@ -297,6 +290,7 @@ interface JiraAgileIssue {
 function jiraAuthHeader(): string {
   return 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 }
+
 function jiraBase(): string { return normalizedBase(); }
 
 export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]> {
@@ -348,7 +342,7 @@ export async function getJiraSprintMeta(
   const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
   console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
   if (!resp.ok) return null;
-  
+
   const d = (await resp.json()) as { id: number; name: string; state?: string; startDate?: string; endDate?: string };
   return { id: d.id, name: d.name, state: d.state, startDate: d.startDate, endDate: d.endDate };
 }
@@ -368,6 +362,8 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     cfg.jiraStoryPointsField,
     'customfield_10014', // Epic Link
     'resolutiondate',
+    'description',
+    ...(cfg.jiraQAAssigneeField ? [cfg.jiraQAAssigneeField] : []),
   ];
   const allowed = new Set(['story', 'bug', 'task', 'spike']);
 
@@ -386,7 +382,9 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
     if (!resp.ok) break;
 
-    const data = (await resp.json()) as { issues?: JiraAgileIssue[] };
+    const data = (await resp.json()) as { issues?: Array<{
+      id: string; key: string; fields: any;
+    }> };
     const list = data.issues ?? [];
 
     for (const it of list) {
@@ -396,6 +394,9 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
       const spVal = (it.fields as Record<string, unknown>)[cfg.jiraStoryPointsField];
       const storyPoints = typeof spVal === 'number' ? spVal : undefined;
       const epicKey = (it.fields as Record<string, unknown>)['customfield_10014'] as string | undefined;
+
+      const qaAssignees = cfg.jiraQAAssigneeField ? parseQAAssignees((it.fields as any)[cfg.jiraQAAssigneeField]) : undefined;
+      const description = adfToPlain(it.fields.description);
 
       out.push({
         id: it.id,
@@ -410,6 +411,9 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
         parentKey: it.fields.parent?.key,
         epicKey,
         resolutiondate: it.fields.resolutiondate as (string | undefined),
+
+        qaAssignees,
+        description,
       });
     }
 
@@ -419,8 +423,6 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
 
   return out;
 }
-
-/* ---------- Scope changes: unchanged ---------- */
 
 export async function getJiraSprintScopeChanges(
   sprintId: number,
@@ -483,14 +485,12 @@ export async function getJiraSprintScopeChanges(
       else if (wasInAtStart) result[key] = 'committed';
       else result[key] = 'committed';
     } catch {
-      // ignore per-issue failures
+
     }
   }
 
   return result;
 }
-
-/* ---------- Phase timestamps from changelog ---------- */
 
 export async function getIssuePhaseTimes(
   issueKeys: string[],
@@ -515,7 +515,7 @@ export async function getIssuePhaseTimes(
         headers: { Authorization: auth, Accept: 'application/json' },
       });
       console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
-      
+
       if (!resp.ok) continue;
       const data = await resp.json() as {
         fields?: { created?: string; status?: { name?: string } };
@@ -541,15 +541,12 @@ export async function getIssuePhaseTimes(
 
       out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst };
     } catch {
-      // ignore one-off failures
+
     }
   }
   return out;
 }
 
-/* ---------- NEW: Dev-status PRs & subtasks ---------- */
-
-// Pull requests linked to an issueId (Jira Cloud dev-status)
 export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string, LinkedPR[]>> {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
@@ -565,7 +562,7 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
       console.log(`[API FETCH START] GET ${url}`);
       const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
       console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
-      
+
       if (!resp.ok) { result[id] = []; continue; }
 
       const raw: unknown = await resp.json();
@@ -593,7 +590,7 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
   return result;
 }
 
-// Map parent key -> subtask issue IDs
+
 export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<string, string[]>> {
   if (parentKeys.length === 0) return {};
   const base = normalizedBase();
@@ -616,12 +613,11 @@ export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<st
   return map;
 }
 
-/* ---------------- NEW: Issues updated in window for a given assignee ---------------- */
 
 export async function getJiraIssuesUpdated(params: {
   assignee: string;
-  from: string;    // YYYY-MM-DD
-  to: string;      // YYYY-MM-DD
+  from: string;
+  to: string;
   jiraAccountId?: string;
   projectKey?: string;
 }): Promise<JiraIssue[]> {
@@ -646,7 +642,7 @@ export async function getJiraIssuesUpdated(params: {
     ? `AND project = ${projectKey}`
     : (envProjects.length ? `AND project in (${envProjects.join(',')})` : '');
 
-  // Prefer exact accountId if provided; otherwise we’ll filter by assignee display name later.
+
   const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
 
   const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
@@ -671,7 +667,7 @@ export async function getJiraIssuesUpdated(params: {
     const assigneeField = issue.fields.assignee;
     const assigneeName = assigneeField?.displayName ?? assigneeField?.emailAddress ?? '';
 
-    // If no accountId filter available, best-effort match on displayName/email
+
     if (!jiraAccountId) {
       const matches = assigneeName.toLowerCase().includes(assignee.toLowerCase());
       if (!matches) continue;
@@ -685,7 +681,7 @@ export async function getJiraIssuesUpdated(params: {
       status: issue.fields.status?.name ?? undefined,
       storyPoints,
       url: `${base}/browse/${issue.key}`,
-      // dates carried through for UI/aggregation
+
       updated: issue.fields.updated,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
@@ -693,4 +689,121 @@ export async function getJiraIssuesUpdated(params: {
   }
 
   return Array.from(byId.values());
+}
+
+export async function getQAAssignmentTimesAll(
+  items: Array<{ key: string; qa: Array<{ id?: string; name: string }> }>,
+  qaFieldId: string
+): Promise<Record<string, Record<string, string | undefined>>> {
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+  const out: Record<string, Record<string, string | undefined>> = {};
+  const norm = (s?: string) => (s ?? '').trim().toLowerCase();
+  const keyOf = (q: { id?: string; name: string }) => (q.id ? `id:${q.id}` : `name:${norm(q.name)}`);
+
+  const parseList = (txt?: string): string[] =>
+    (txt ?? '')
+      .split(/[,;]+/)
+      .map(s => norm(s))
+      .filter(Boolean);
+
+  for (const row of items) {
+    out[row.key] = {};
+    try {
+      const url = `${base}/rest/api/3/issue/${encodeURIComponent(row.key)}?expand=changelog&fields=none`;
+      console.log(`[API FETCH START] GET ${url}`);
+      const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+      console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
+      if (!resp.ok) continue;
+
+      const data = await resp.json() as {
+        changelog?: { histories?: Array<{
+          created?: string;
+          items?: Array<{ field?: string; fieldId?: string; to?: string; from?: string; toString?: string; fromString?: string }>;
+        }> };
+      };
+
+      const targets = new Set(row.qa.map(keyOf));
+      const histories = (data.changelog?.histories ?? []).sort((a, b) => (a.created ?? '').localeCompare(b.created ?? ''));
+
+      for (const h of histories) {
+        for (const it of (h.items ?? [])) {
+          const isQAField = (it.fieldId && it.fieldId === qaFieldId) || (it.field && norm(it.field) === 'qa assignee');
+          if (!isQAField) continue;
+
+          const toNames = new Set(parseList(it.toString));
+          const fromNames = new Set(parseList(it.fromString));
+
+          for (const nm of toNames) {
+            if (!fromNames.has(nm)) {
+              const k = `name:${nm}`;
+              if (targets.has(k) && !out[row.key][k]) out[row.key][k] = h.created;
+            }
+          }
+
+          const toIds = new Set((it.to ?? '').toString().split(/[,;]+/).map(s => s.trim()).filter(Boolean));
+          const fromIds = new Set((it.from ?? '').toString().split(/[,;]+/).map(s => s.trim()).filter(Boolean));
+          for (const id of toIds) {
+            if (!fromIds.has(id)) {
+              const k = `id:${id}`;
+              if (targets.has(k) && !out[row.key][k]) out[row.key][k] = h.created;
+            }
+          }
+        }
+      }
+    } catch {
+
+    }
+  }
+  return out;
+}
+
+
+function parseQAAssignees(val: unknown): Array<{ id?: string; name: string }> | undefined {
+  if (!val) return undefined;
+  if (Array.isArray(val)) {
+    const arr = val
+      .map((v: any) => {
+        if (v && typeof v === 'object') {
+          return { id: v.accountId as string | undefined, name: (v.displayName || v.name || '').toString() };
+        }
+        if (typeof v === 'string') return { name: v };
+        return null;
+      })
+      .filter((x): x is { id?: string; name: string } => !!x && !!x.name);
+    return arr.length ? arr : undefined;
+  }
+  if (typeof val === 'object') {
+    const o = val as any;
+    if (o.displayName || o.name) return [{ id: o.accountId as string | undefined, name: (o.displayName || o.name).toString() }];
+  }
+  if (typeof val === 'string') {
+    const parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts.map(name => ({ name })) : undefined;
+  }
+  return undefined;
+}
+
+function adfToPlain(input: unknown): string | undefined {
+  if (!input) return undefined;
+  if (typeof input === 'string') return input;
+  try {
+    const walk = (n: any): string => {
+      if (!n) return '';
+      if (typeof n === 'string') return n;
+      if (Array.isArray(n)) return n.map(walk).join('');
+      if (typeof n === 'object') {
+        const type = n.type;
+        if (type === 'text' && typeof n.text === 'string') return n.text;
+        const content = Array.isArray(n.content) ? n.content.map(walk).join('') : '';
+        if (type === 'paragraph') return content + '\n';
+        return content;
+      }
+      return '';
+    };
+    const s = walk(input).replace(/\n{3,}/g, '\n\n').trim();
+    return s || undefined;
+  } catch {
+    return undefined;
+  }
 }

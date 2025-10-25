@@ -6,10 +6,7 @@ import { requireAuthOr401 } from '@/lib/auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/sprints?boardId=123
- * If boardId is missing, tries env JIRA_BOARD_ID.
- */
+
 export async function GET(req: Request) {
   const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
 
