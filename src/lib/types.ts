@@ -1,4 +1,4 @@
-// lib/types.ts
+
 
 export interface PR {
   id: string;
@@ -6,9 +6,9 @@ export interface PR {
   title: string;
   url: string;
 
-  createdAt: string;       // ISO
-  mergedAt: string | null; // ISO or null
-  closedAt: string | null; // ISO or null
+  createdAt: string;
+  mergedAt: string | null;
+  closedAt: string | null;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
 
@@ -16,14 +16,14 @@ export interface PR {
   deletions: number;
   repository: { owner: string; name: string };
 
-  // extra timestamps used for lifecycle calculations
+
   firstReviewAt?: string | null;
   readyForReviewAt?: string | null;
 
   jiraKeys?: string[];
 }
 
-/** PR reference coming from Jira dev-status or other sources */
+
 export interface LinkedPR {
   id?: string;
   url: string;
@@ -41,31 +41,41 @@ export interface JiraIssue {
   status?: string;
   url: string;
 
-  // used by sprint helpers / UI
+
   created?: string;
   updated?: string;
   issueType?: string;
   parentKey?: string;
   epicKey?: string;
 
-  // NEW: phase timestamps (from changelog)
+
+  description?: string;
+
+
+  qaAssignees?: Array<{ id?: string; name: string }>;
+
+  qaAssignedAtMap?: Record<string, string | undefined>;
+
+  qaReviewToCompleteHoursByQA?: Record<string, number | null>;
+
+
   todoAt?: string;
   inProgressAt?: string;
-  reviewAt?: string;    // first time reaching a "review" status (Reviewed/Review/In Review)
-  completeAt?: string;  // first time reaching Approved/Done (proxy for merged if no GitHub link)
+  reviewAt?: string;
+  completeAt?: string;
 
-  // NEW: phase durations (hours)
+
   inProgressToReviewHours?: number | null;
   reviewToCompleteHours?: number | null;
 
-  // NEW: cycle time from first "To Do/Created" to "Review" (hours)
+
   todoToReviewHours?: number | null;
 
-  // NEW: dev-status PRs & aggregated metrics
+
   linkedPRs?: LinkedPR[];
   prAdditions?: number;
   prDeletions?: number;
-  prReviewComments?: number; // total code-review comments across linked PRs
+  prReviewComments?: number;
 }
 
 export interface KPIs {
@@ -77,7 +87,7 @@ export interface KPIs {
 }
 
 export interface TimeseriesItem {
-  date: string; // YYYY-MM-DD
+  date: string;
   prCount: number;
   additions: number;
   deletions: number;
@@ -85,7 +95,7 @@ export interface TimeseriesItem {
   storyPoints: number;
 }
 
-/* -------- Lifecycle (for /api/stats and PRLifecycle view) -------- */
+
 
 export interface PRLifecycle {
   id: string;
@@ -100,11 +110,11 @@ export interface PRLifecycle {
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
 
-  // LOC deltas
+
   additions?: number;
   deletions?: number;
 
-  // computed (hours)
+
   timeToReadyHours?: number | null;
   timeToFirstReviewHours?: number | null;
   reviewToMergeHours?: number | null;
@@ -122,7 +132,7 @@ export interface LifecycleStats {
 export interface StatsResponse {
   from: string;
   to: string;
-  login: string; // GitHub login
+  login: string;
   kpis: KPIs;
   timeseries: TimeseriesItem[];
   prs: PR[];
@@ -135,7 +145,7 @@ export interface StatsResponse {
   };
 }
 
-/* ---------------- Sprint page types (/api/sprint-stats) ---------------- */
+
 
 export interface JiraSprintLite {
   id: number;
@@ -146,42 +156,42 @@ export interface JiraSprintLite {
 }
 
 export interface SprintKPI {
-  // scope
+
   committedSP: number;
   scopeAddedSP: number;
   scopeRemovedSP: number;
 
-  // ORIGINAL simple "completed" (kept for compatibility; equals Complete)
+
   completedSP: number;
   remainingSP: number;
   completionPct: number;
 
-  // development progress (up to Reviewed)
+
   devCompletedSP: number;
   devRemainingSP: number;
   devCompletionPct: number;
 
-  // complete progress (up to Approved/Done)
+
   completeCompletedSP: number;
   completeRemainingSP: number;
   completeCompletionPct: number;
 
-  // NEW: totals for PR LOC across all sprint tickets
+
   totalPRAdditions?: number;
   totalPRDeletions?: number;
 }
 
 export interface CompletedByAssignee {
-  assignee: string;      // display name or "Unassigned"
-  devPoints: number;     // tickets that reached Review (development complete)
-  completePoints: number; // tickets that reached Approved/Done (dev+QA complete)
+  assignee: string;
+  devPoints: number;
+  completePoints: number;
 }
 
 export interface SprintBurnItem {
   date: string;
   committed: number;
 
-  // Actuals
+
   completed: number;
   remaining: number;
   devCompleted: number;
@@ -189,7 +199,7 @@ export interface SprintBurnItem {
   completeCompleted: number;
   completeRemaining: number;
 
-  // Forecast values (for future dates)
+
   devForecastCompleted?: number;
   devForecastRemaining?: number;
   completeForecastCompleted?: number;
@@ -209,14 +219,22 @@ export interface SprintStatsResponse {
 
   completedByAssignee?: CompletedByAssignee[];
   ticketsInQA?: number;
+  
+  qaActivity?: Record<string, QAActivityEvent[]>;
 
   forecast?: {
-    devCompletionDate?: string;      // YYYY-MM-DD when dev (Review) hits scope
-    completeCompletionDate?: string; // YYYY-MM-DD when complete (Approved/Done) hits scope
+    devCompletionDate?: string;
+    completeCompletionDate?: string;
   };
 }
 
-/* ---------------- People / Projects dropdowns ---------------- */
+
+export interface QAActivityEvent {
+  at: string; // ISO
+  type: 'comment' | 'status';
+  issueKey: string;
+}
+
 
 export interface GithubUser {
   login: string;

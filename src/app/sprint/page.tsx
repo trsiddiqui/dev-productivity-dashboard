@@ -1,4 +1,4 @@
-// src/app/sprint/page.tsx
+
 "use client";
 import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -25,10 +25,10 @@ import {
 
 const COMPACT_SWITCH_PX = 480;
 
-/* ===================== Theme-aware tokens ===================== */
-/** Use CSS vars so the whole page adapts to [data-theme] */
+
+
 const t = {
-  // surfaces
+
   appBg: "var(--background)",
   appFg: "var(--foreground)",
   surface: "var(--surface)",
@@ -36,25 +36,25 @@ const t = {
   link: "var(--surface-link)",
   faintText: "var(--faint-text)",
 
-  // cards
+
   cardBg: "var(--card-bg)",
   cardFg: "var(--card-fg)",
   cardBr: "var(--card-br)",
 
-  // general
+
   muted: "var(--muted)",
 };
 
-/* ===================== Palette / helpers ===================== */
+
 const palette = {
-  // stages (kept vivid)
+
   todo: "#94a3b8",
   progress: "#3b82f6",
   review: "#8b5cf6",
   done: "#22c55e",
   blocked: "#f59e0b",
+  approved: "#10b981",
 
-  // type chips
   story: "#6366f1",
   bug: "#ef4444",
   task: "#0ea5e9",
@@ -126,7 +126,7 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`;
 }
 
-/** Return date/time parts in Central Time for two-line display */
+
 function centralParts(iso?: string): { date: string; timeTz: string } {
   if (!iso) return { date: "—", timeTz: "" };
   const d = new Date(iso);
@@ -151,7 +151,7 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
   return { date: `${yyyy}-${mm}-${dd}`, timeTz: `${hh}:${mi} ${tz}` };
 }
 
-/* ===================== Small shared UI ===================== */
+
 function Num({ v }: { v: number | undefined }): JSX.Element {
   const n = Number.isFinite(v) ? (v as number) : 0;
   return <span>{n.toLocaleString()}</span>;
@@ -189,27 +189,28 @@ function Pill({
   );
 }
 
-/* ===================== Main Page ===================== */
+
 export default function SprintPage(): JSX.Element {
-  // Controls
+
   const [boardId, setBoardId] = useState<string>("");
   const [sprints, setSprints] = useState<JiraSprintLite[]>([]);
   const [sprintId, setSprintId] = useState<string>("");
   const [loadingSprints, setLoadingSprints] = useState<boolean>(false);
 
-  // Data
+
   const [data, setData] = useState<SprintStatsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // progress (SSE)
+
   const [pct, setPct] = useState<number>(0);
   const [stage, setStage] = useState<string>("");
   const esRef = useRef<EventSource | null>(null);
 
-  // UI state: expanded people
+
   const [openAssignees, setOpenAssignees] = useState<Set<string>>(new Set());
+  const [openQA, setOpenQA] = useState<Set<string>>(new Set());
 
   const sprintOptions: Option[] = useMemo(
     () =>
@@ -253,7 +254,7 @@ export default function SprintPage(): JSX.Element {
     }
   }
 
-  // Group issues by assignee
+
   const issuesByAssignee = useMemo(() => {
     const m = new Map<string, JiraIssue[]>();
     if (!data?.issues) return m;
@@ -273,7 +274,31 @@ export default function SprintPage(): JSX.Element {
     return m;
   }, [data]);
 
-  // Assigned story points per assignee → for pie
+
+  type IssueQA = { issue: JiraIssue; qa: { id?: string; name: string } };
+  const issuesByQA = useMemo(() => {
+    const m = new Map<string, IssueQA[]>();
+    if (!data?.issues) return m;
+    for (const it of data.issues) {
+      for (const qa of it.qaAssignees ?? []) {
+        const name = (qa.name ?? "").trim();
+        if (!name) continue;
+        if (!m.has(name)) m.set(name, []);
+        m.get(name)!.push({ issue: it, qa });
+      }
+    }
+    for (const [k, arr] of m.entries()) {
+      arr.sort((a, b) => {
+        const aKey = a.issue.reviewAt ?? a.issue.completeAt ?? a.issue.created ?? "";
+        const bKey = b.issue.reviewAt ?? b.issue.completeAt ?? b.issue.created ?? "";
+        return aKey.localeCompare(bKey);
+      });
+      m.set(k, arr);
+    }
+    return m;
+  }, [data]);
+
+
   const assignedPointsByAssignee = useMemo(() => {
     const mp = new Map<string, number>();
     if (!data?.issues) return mp;
@@ -325,7 +350,7 @@ export default function SprintPage(): JSX.Element {
     ];
   }, [data]);
 
-  // Fetch with streaming progress (SSE). Falls back to JSON fetch if it fails.
+
   async function fetchStats(): Promise<void> {
     if (!sprintId) {
       setError("Pick a sprint");
@@ -368,7 +393,7 @@ export default function SprintPage(): JSX.Element {
             esRef.current = null;
           }
         } catch {
-          /* ignore malformed chunks */
+
         }
       };
 
@@ -402,7 +427,7 @@ export default function SprintPage(): JSX.Element {
 
   useEffect(() => {
     loadSprints();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   function toggleAssignee(name: string) {
@@ -412,6 +437,33 @@ export default function SprintPage(): JSX.Element {
       else next.add(name);
       return next;
     });
+  }
+  function toggleQA(name: string) {
+    setOpenQA((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+
+  const qaKeyOf = (qa: { id?: string; name: string }) =>
+    qa.id ? `id:${qa.id}` : `name:${(qa.name ?? "").trim().toLowerCase()}`;
+
+  function qaDurationForIssue(issue: JiraIssue, qa: { id?: string; name: string }): number | null | undefined {
+    const k = qaKeyOf(qa);
+    if (issue.qaReviewToCompleteHoursByQA && k in issue.qaReviewToCompleteHoursByQA) {
+      return issue.qaReviewToCompleteHoursByQA[k];
+    }
+
+    if (!issue.completeAt) return null;
+    const reviewStart = issue.reviewAt ?? issue.completeAt;
+    if (!reviewStart) return null;
+    const assignedAt = issue.qaAssignedAtMap?.[k];
+    const start = assignedAt && new Date(assignedAt).getTime() > new Date(reviewStart).getTime()
+      ? assignedAt : reviewStart;
+    return Math.max(0, (new Date(issue.completeAt).getTime() - new Date(start).getTime()) / 36e5);
   }
 
   return (
@@ -427,7 +479,7 @@ export default function SprintPage(): JSX.Element {
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>Sprint Dashboard</h1>
       </header>
 
-      {/* Controls */}
+      {}
       <div
         style={{
           display: "grid",
@@ -510,22 +562,8 @@ export default function SprintPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Optional quick actions */}
+      {}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
-        {/* <button
-          onClick={fetchStats}
-          disabled={loading || !sprintId}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: `1px solid ${t.border}`,
-            background: t.surface,
-            color: t.appFg,
-            opacity: loading || !sprintId ? 0.6 : 1,
-          }}
-        >
-          Fetch
-        </button> */}
         {loading && (
           <button
             onClick={() => {
@@ -547,7 +585,7 @@ export default function SprintPage(): JSX.Element {
         )}
       </div>
 
-      {/* Progress UI */}
+      {}
       {loading && (
         <div style={{ marginTop: 12, maxWidth: 560 }}>
           <div style={{ height: 10, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8 }}>
@@ -570,7 +608,7 @@ export default function SprintPage(): JSX.Element {
         </div>
       )}
 
-      {/* Warnings / errors */}
+      {}
       {!!error && (
         <div
           style={{
@@ -605,10 +643,10 @@ export default function SprintPage(): JSX.Element {
         </div>
       )}
 
-      {/* DATA */}
+      {}
       {data && (
         <>
-          {/* KPIs */}
+          {}
           <div
             style={{
               display: "grid",
@@ -637,7 +675,7 @@ export default function SprintPage(): JSX.Element {
             ))}
           </div>
 
-          {/* Burn + Story-point distribution */}
+          {}
           <div
             style={{
               display: "grid",
@@ -646,7 +684,7 @@ export default function SprintPage(): JSX.Element {
               marginBottom: 16,
             }}
           >
-            {/* Burn chart */}
+            {}
             <div
               style={{
                 background: t.cardBg,
@@ -680,7 +718,7 @@ export default function SprintPage(): JSX.Element {
               </div>
             </div>
 
-            {/* Pie: SP distribution by assignee */}
+            {}
             <div
               style={{
                 background: t.cardBg,
@@ -716,7 +754,7 @@ export default function SprintPage(): JSX.Element {
             </div>
           </div>
 
-          {/* Completed by Assignee */}
+          {}
           {data.completedByAssignee && data.completedByAssignee.length > 0 && (
             <div
               style={{
@@ -785,7 +823,7 @@ export default function SprintPage(): JSX.Element {
                         </button>
                       </div>
 
-                      {/* three quick stats */}
+                      {}
                       <div
                         style={{
                           display: "grid",
@@ -799,7 +837,7 @@ export default function SprintPage(): JSX.Element {
                         <MiniStat label="LOC Changed" value={locChanged} tint={palette.todo} />
                       </div>
 
-                      {/* SP & ratios */}
+                      {}
                       <div
                         style={{
                           display: "grid",
@@ -816,7 +854,7 @@ export default function SprintPage(): JSX.Element {
                         />
                       </div>
 
-                      {/* Collapsible ticket timelines */}
+                      {}
                       {isOpen && (
                         <div
                           style={{
@@ -837,14 +875,120 @@ export default function SprintPage(): JSX.Element {
               </div>
             </div>
           )}
+
+          {}
+          {issuesByQA.size > 0 && (
+            <div
+              style={{
+                background: t.surface,
+                color: t.appFg,
+                borderRadius: 12,
+                padding: 16,
+                border: `1px solid ${t.border}`,
+                boxShadow: "0 2px 14px rgba(0,0,0,0.08)",
+                marginBottom: 16,
+              }}
+            >
+              <h2 style={{ fontWeight: 700, marginBottom: 8 }}>QA Assignees</h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {Array.from(issuesByQA.entries()).map(([name, items]) => {
+                  const totalSP = items.reduce((a, row) => a + (row.issue.storyPoints ?? 0), 0);
+                  const durations = items
+                    .map(({ issue, qa }) => qaDurationForIssue(issue, qa))
+                    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+                  const avg = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+
+                  const isOpen = openQA.has(name);
+                  return (
+                    <div
+                      key={name}
+                      style={{
+                        border: `1px solid ${t.cardBr}`,
+                        borderRadius: 12,
+                        padding: 12,
+                        background: t.cardBg,
+                        color: t.cardFg,
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontWeight: 800 }}>{name}</div>
+                        <button
+                          onClick={() => toggleQA(name)}
+                          style={{
+                            border: `1px solid ${t.cardBr}`,
+                            borderRadius: 8,
+                            padding: "6px 10px",
+                            background: t.surface,
+                            color: t.cardFg,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {isOpen ? `Hide tickets (${items.length})` : `Show tickets (${items.length})`}
+                        </button>
+                      </div>
+
+                      {}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: 8,
+                          marginTop: 10,
+                        }}
+                      >
+                        <MiniStat label="Story Points" value={totalSP} tint={palette.story} />
+                        <MiniStat label="Tickets" value={items.length} tint={palette.todo} />
+                        <div
+                          style={{
+                            background: `rgba(${hexToRgb(palette.review)}, 0.10)`,
+                            borderRadius: 10,
+                            padding: 10,
+                            border: `1px solid rgba(${hexToRgb(palette.review)}, 0.35)`,
+                          }}
+                        >
+                          <div style={{ fontSize: 12, color: t.muted, marginBottom: 2 }}>Avg Review → Approved</div>
+                          <div style={{ fontSize: 18, fontWeight: 800, textAlign: "right" }}>
+                            <Hrs v={avg} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {}
+                      {isOpen && (
+                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                          {items.sort((a, b) => (a.issue.status! < b.issue.status! ? -1 : 1)).map(({ issue, qa }) => (
+                            <QATicketRow key={`${issue.key}-${qaKeyOf(qa)}`} issue={issue} qa={qa} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   );
 }
 
-/* ===================== Little helpers ===================== */
-function MiniStat({ label, value, tint }: { label: string; value?: number; tint: string }) {
+
+function MiniStat({ label, value, tint }: { label: string; value?: number | null; tint: string }) {
   return (
     <div
       style={{
@@ -856,7 +1000,7 @@ function MiniStat({ label, value, tint }: { label: string; value?: number; tint:
     >
       <div style={{ fontSize: 12, color: t.muted, marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, textAlign: "right" }}>
-        <Num v={value ?? 0} />
+        {typeof value === "number" ? <Num v={value ?? 0} /> : <span>—</span>}
       </div>
     </div>
   );
@@ -985,20 +1129,19 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
     return () => ro.disconnect();
   }, []);
 
-  // make status class slug so CSS in globals.css like ".in-progress-card" applies
-    const sg = statusGroup(issue.status);
-    const statusSlug =
-      sg === "other"
-        ? toSlug(issue.status)
-        : toSlug(
-            {
-              todo: "todo",
-              progress: "in-progress",
-              review: "review",
-              done: "done",
-              blocked: "impeded",
-            }[sg]
-          );
+  const sg = statusGroup(issue.status);
+  const statusSlug =
+    sg === "other"
+      ? toSlug(issue.status)
+      : toSlug(
+          {
+            todo: "todo",
+            progress: "in-progress",
+            review: "review",
+            done: "done",
+            blocked: "impeded",
+          }[sg]
+        );
 
   return (
     <div
@@ -1006,11 +1149,10 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         border: `1px solid ${t.cardBr}`,
         borderRadius: 12,
         padding: 12,
-        // background: t.surface,
       }}
       className={`${statusSlug}-card`}
     >
-      {/* header */}
+      {}
       <div
         style={{
           display: "flex",
@@ -1049,7 +1191,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         </div>
       </div>
 
-      {/* LOC + review counts mini cards */}
+      {}
       <div
         style={{
           display: "flex",
@@ -1064,7 +1206,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         <StatCard label="Review Cmts" value={issue.prReviewComments ?? 0} />
       </div>
 
-      {/* timeline */}
+      {}
       <div
         ref={rowRef}
         style={{
@@ -1084,7 +1226,7 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         <Step label="Approved" date={compAt} color={palette.done} active={hasDone} compact={compact} />
       </div>
 
-      {/* durations */}
+      {}
       <div
         style={{
           display: "flex",
@@ -1108,8 +1250,69 @@ function TicketTimeline({ issue }: { issue: JiraIssue }) {
         </Pill>
       </div>
 
-      {/* summary */}
+      {}
       <div style={{ marginTop: 8, fontSize: 13, color: t.appFg }}>{issue.summary}</div>
+    </div>
+  );
+}
+
+function QATicketRow({ issue, qa }: { issue: JiraIssue; qa: { id?: string; name: string } }) {
+  const typeSty = typeColor(issue.issueType);
+  const statSty = statusColor(issue.status);
+  const review = centralParts(issue.reviewAt);
+  const approved = centralParts(issue.completeAt);
+
+  const qaKey = qa.id ? `id:${qa.id}` : `name:${(qa.name ?? "").trim().toLowerCase()}`;
+  const duration =
+    issue.qaReviewToCompleteHoursByQA && qaKey in issue.qaReviewToCompleteHoursByQA
+      ? issue.qaReviewToCompleteHoursByQA[qaKey]
+      : undefined;
+
+
+  const durCalc = duration ?? (() => {
+    if (!issue.completeAt) return null;
+    const reviewStart = issue.reviewAt ?? issue.completeAt;
+    if (!reviewStart) return null;
+    const assignedAt = issue.qaAssignedAtMap?.[qaKey];
+    const start = assignedAt && new Date(assignedAt).getTime() > new Date(reviewStart).getTime()
+      ? assignedAt : reviewStart;
+    return Math.max(0, (new Date(issue.completeAt).getTime() - new Date(start).getTime()) / 36e5);
+  })();
+  
+  const statusSlug = toSlug(issue.status)
+
+  return (
+    <div style={{ border: `1px solid ${t.cardBr}`, borderRadius: 10, padding: 10 }} className={`${statusSlug}-card`}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <a href={issue.url} target="_blank" rel="noreferrer" style={{ fontWeight: 800, color: t.link }}>
+            {issue.key}
+          </a>
+          <Pill bg={typeSty.bg} br={typeSty.br}>{issue.issueType ?? "Ticket"}</Pill>
+          {typeof issue.storyPoints === "number" && (
+            <Pill bg={`rgba(${hexToRgb(palette.story)}, 0.14)`} br={`rgba(${hexToRgb(palette.story)}, 0.35)`}>
+              {issue.storyPoints} SP
+            </Pill>
+          )}
+          {issue.status && <Pill bg={statSty.bg} br={statSty.br}>{issue.status}</Pill>}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <Pill bg={`rgba(${hexToRgb(palette.review)}, 0.10)`} br={`rgba(${hexToRgb(palette.review)}, 0.35)`}>
+            Review: <span style={{ marginLeft: 6, fontWeight: 700 }}>{review.date}</span>
+          </Pill>
+          <Pill bg={`rgba(${hexToRgb(palette.done)}, 0.10)`} br={`rgba(${hexToRgb(palette.done)}, 0.35)`}>
+            Approved: <span style={{ marginLeft: 6, fontWeight: 700 }}>{approved.date}</span>
+          </Pill>
+          <Pill bg={`rgba(${hexToRgb(palette.review)}, 0.14)`} br={`rgba(${hexToRgb(palette.review)}, 0.35)`}>
+            Actual (QA): <span style={{ marginLeft: 6, fontWeight: 700 }}><Hrs v={durCalc} /></span>
+          </Pill>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 13 }}>
+        <div style={{ fontWeight: 700 }} title={ issue.description ?? issue.description}>{issue.summary}</div>
+      </div>
     </div>
   );
 }

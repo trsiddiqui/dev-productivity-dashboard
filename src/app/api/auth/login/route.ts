@@ -1,4 +1,4 @@
-// src/app/api/auth/login/route.ts
+
 import { NextResponse } from 'next/server';
 import { setSessionCookie, verifyCredentials } from '@/lib/auth';
 

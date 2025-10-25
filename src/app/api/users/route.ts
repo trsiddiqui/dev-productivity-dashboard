@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
   const warnings: string[] = [];
 
-  // ✅ annotate the arrays so they aren't implicitly `any[]`
+
   let github: GithubUser[] = [];
   let jira: JiraUserLite[] = [];
 

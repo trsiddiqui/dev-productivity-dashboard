@@ -13,15 +13,15 @@ function getInitialTheme(): Theme {
 }
 
 function applyTheme(theme: Theme) {
-  // Put the theme on <html data-theme="..."> so your CSS vars take effect
+
   document.documentElement.setAttribute('data-theme', theme);
 }
 
 export default function ThemeSelect() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
-  // Apply on mount (in case the initial render happens before we set it),
-  // and whenever the user changes it.
+
+
   useEffect(() => {
     applyTheme(theme);
     window.localStorage.setItem(STORAGE_KEY, theme);

@@ -9,4 +9,7 @@ export const cfg = {
   jiraEmail: process.env.JIRA_EMAIL ?? '',
   jiraToken: process.env.JIRA_API_TOKEN ?? '',
   jiraStoryPointsField: process.env.JIRA_STORY_POINTS_FIELD ?? 'customfield_10026',
+
+  // NEW: Jira custom field id for "QA Assignee" (e.g., customfield_12345)
+  jiraQAAssigneeField: process.env.JIRA_QA_ASSIGNEE_FIELD ?? 'customfield_11370',
 };

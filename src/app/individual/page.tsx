@@ -18,14 +18,14 @@ import { PRLifecycleView } from '../components/PRLifeCycle';
 
 export default function Page(): JSX.Element {
 
-  // selections
+
   const [ghLogin, setGhLogin] = useState<string>('');
   const [jiraAccountId, setJiraAccountId] = useState<string>('');
   const [projectKey, setProjectKey] = useState<string>('');
-  // dates
+
   const [from, setFrom] = useState<string>(formatISO(subDays(new Date(), 14), { representation: 'date' }));
   const [to, setTo] = useState<string>(formatISO(new Date(), { representation: 'date' }));
-  // data
+
   const [users, setUsers] = useState<UsersResponse | null>(null);
   const [projects, setProjects] = useState<ProjectsResponse | null>(null);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
@@ -34,7 +34,7 @@ export default function Page(): JSX.Element {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load users once
+
   useEffect(() => {
     (async () => {
       setLoadingUsers(true);
@@ -46,15 +46,15 @@ export default function Page(): JSX.Element {
         if (!ghLogin && json.github.length > 0) setGhLogin(json.github[0].login);
         if (!jiraAccountId && json.jira.length > 0) setJiraAccountId(json.jira[0].accountId);
       } catch {
-        // Silent
+
       } finally {
         setLoadingUsers(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
-  // Load projects once
+
   useEffect(() => {
     (async () => {
       setLoadingProjects(true);
@@ -64,7 +64,7 @@ export default function Page(): JSX.Element {
         const json: ProjectsResponse = await resp.json();
         setProjects(json);
       } catch {
-        // Silent
+
       } finally {
         setLoadingProjects(false);
       }
@@ -125,7 +125,7 @@ export default function Page(): JSX.Element {
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Developer Performance Dashboard</h1>
       </header>
 
-      {/* Controls */}
+      {}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>
         <div>
           <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>GitHub user</label>
@@ -212,7 +212,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      {/* warnings */}
+      {}
       {users?.warnings && users.warnings.length > 0 && (
         <div style={{ padding: 12, background: '#fff7ed', color: '#7c2d12', borderRadius: 8, marginBottom: 16 }}>
           {users.warnings.map((w) => <div key={w}>{w}</div>)}
@@ -229,14 +229,14 @@ export default function Page(): JSX.Element {
         </div>
       )}
 
-      {/* errors */}
+      {}
       {error && (
         <div style={{ padding: 12, background: '#ffe4e6', color: '#7f1d1d', borderRadius: 8, marginBottom: 16 }}>
           {error}
         </div>
       )}
 
-      {/* dashboard */}
+      {}
       {data && (
         <>
           <KPIsView kpis={data.kpis} />
@@ -249,7 +249,7 @@ export default function Page(): JSX.Element {
             </>
           )}
 
-          {/* Tickets */}
+          {}
           <div style={{ background: 'white', borderRadius: 12, padding: 16, marginTop: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
             <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Tickets</h2>
             <ul style={{ margin: 0, paddingLeft: 18 }}>

@@ -16,12 +16,12 @@ interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   emptyHint?: string;
-  style?: React.CSSProperties; // NEW
+  style?: React.CSSProperties;
 }
-/* ===================== Theme-aware tokens ===================== */
-/** Use CSS vars so the whole page adapts to [data-theme] */
+
+
 const t = {
-  // surfaces
+
   appBg: "var(--background)",
   appFg: "var(--foreground)",
   surface: "var(--surface)",
@@ -29,12 +29,12 @@ const t = {
   link: "var(--surface-link)",
   faintText: "var(--faint-text)",
 
-  // cards
+
   cardBg: "var(--card-bg)",
   cardFg: "var(--card-fg)",
   cardBr: "var(--card-br)",
 
-  // general
+
   muted: "var(--muted)",
 };
 
@@ -45,7 +45,7 @@ export function SearchableSelect({
   placeholder = 'Search…',
   disabled = false,
   emptyHint = 'No matches',
-  style, // NEW
+  style,
 }: SearchableSelectProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
@@ -59,12 +59,12 @@ export function SearchableSelect({
     [items, value]
   );
 
-  // Keep input displaying the selected label when closed
+
   useEffect(() => {
     if (!open) setInputValue(selected?.label ?? '');
   }, [open, selected]);
 
-  // Click outside to close
+
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!rootRef.current) return;
@@ -115,7 +115,7 @@ export function SearchableSelect({
     }
   }
 
-  // Scroll highlighted item into view
+
   useEffect(() => {
     if (!open || highlight < 0 || !listRef.current) return;
     const el = listRef.current.querySelector<HTMLElement>(`[data-index="${highlight}"]`);
@@ -141,8 +141,8 @@ export function SearchableSelect({
           width: '100%',
           padding: '8px 10px',
           borderRadius: 8,
-          border: '1px solid #ddd',          
-          background: t.cardBg, 
+          border: '1px solid #ddd',
+          background: t.cardBg,
           color: t.cardFg,
         }}
       />

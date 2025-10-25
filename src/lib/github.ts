@@ -101,7 +101,7 @@ export async function getGithubPRsWithStats(params: {
     for (const edge of data.edges) {
       const n = edge.node;
 
-      // earliest non-null review submission time
+
       let firstReviewAt: string | null = null;
       for (const r of n.reviews.nodes) {
         if (r.submittedAt) {
@@ -109,7 +109,7 @@ export async function getGithubPRsWithStats(params: {
         }
       }
 
-      // earliest "ready for review" event time
+
       let readyForReviewAt: string | null = null;
       for (const ev of n.timelineItems.nodes) {
         if (ev.__typename === 'ReadyForReviewEvent') {
@@ -151,7 +151,7 @@ function buildScopeFilter(): string {
   return parts.join(' ');
 }
 
-/** New: list members of a GitHub org (needs read:org token) */
+
 export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
   if (!cfg.githubOrg) return [];
@@ -175,24 +175,24 @@ export async function getGithubOrgMembers(): Promise<GithubUser[]> {
   return out;
 }
 
-/* =============================== */
-/*   Stats by PR URL list (LOC + review comments)  */
-/* =============================== */
+
+
+
 
 type PullRef = { owner: string; repo: string; number: number; url: string };
 
-/** Parse https://github.com/{owner}/{repo}/pull/{number} or API variants */
+
 function parsePullUrl(url: string): PullRef | null {
   try {
     const u = new URL(url);
-    // REST api form
+
     const apiMatch = u.hostname === 'api.github.com'
       ? u.pathname.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)/i)
       : null;
     if (apiMatch) {
       return { owner: apiMatch[1], repo: apiMatch[2], number: Number(apiMatch[3]), url };
     }
-    // web form
+
     const webMatch = u.hostname.endsWith('github.com')
       ? u.pathname.match(/^\/([^/]+)\/([^/]+)\/pulls?\/(\d+)/i)
       : null;
@@ -237,7 +237,7 @@ export async function getGithubPRStatsByUrls(
     }
   `;
 
-  // modest concurrency
+
   const chunks: PullRef[][] = [];
   const size = 10;
   for (let i = 0; i < refs.length; i += size) chunks.push(refs.slice(i, i + size));
@@ -275,7 +275,7 @@ export async function getGithubPRStatsByUrls(
             out[ref.url] = { additions: pr.additions, deletions: pr.deletions, reviewComments: commentSum };
           }
         } catch {
-          // ignore individual failures
+
         }
       })
     );

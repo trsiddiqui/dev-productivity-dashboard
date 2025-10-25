@@ -13,7 +13,7 @@ export default function AuthGate({
   const router = useRouter();
   const pathname = usePathname() || '/';
 
-  // If not authed and not already on /login, jump to /login and show nothing.
+
   React.useEffect(() => {
     if (!authed && pathname !== '/') {
       const next = encodeURIComponent(pathname);
@@ -21,7 +21,7 @@ export default function AuthGate({
     }
   }, [authed, pathname, router]);
 
-  // Allow the login page to render even when unauthenticated.
+
   if (!authed && pathname !== '/') return null;
 
   return <>{children}</>;

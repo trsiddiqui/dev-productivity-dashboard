@@ -10,14 +10,14 @@ function Hrs({ v }: { v?: number | null }): JSX.Element {
   return <span>{v.toFixed(1)}h</span>;
 }
 
-/* number formatting, right-aligned */
+
 function Num({ v }: { v?: number | null }): JSX.Element {
   if (v === null || v === undefined) return <span>0</span>;
   const n = Number.isFinite(v) ? (v as number) : 0;
   return <span>{n.toLocaleString()}</span>;
 }
 
-/* date + time on two lines in LOCAL timezone */
+
 function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
   if (!iso) return <span>—</span>;
   const d = new Date(iso);
@@ -51,7 +51,7 @@ export function PRLifecycleView({
   items: PRLifecycle[];
   stats: LifecycleStats;
 }): JSX.Element {
-  /* cell styles with vertical separators */
+
   const thBase: React.CSSProperties = {
     padding: '10px 12px',
     borderRight: '1px solid #1f2937',
@@ -74,7 +74,7 @@ export function PRLifecycleView({
     <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
       <h2 style={{ fontWeight: 600, marginBottom: 12 }}>PR Lifecycle</h2>
 
-      {/* KPIs */}
+      {}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
         <Kpi label="Median Time to Ready" value={<Hrs v={stats.medianTimeToReadyHours} />} />
         <Kpi label="Median Time to First Review" value={<Hrs v={stats.medianTimeToFirstReviewHours} />} />
@@ -82,7 +82,7 @@ export function PRLifecycleView({
         <Kpi label="Median Cycle Time" value={<Hrs v={stats.medianCycleTimeHours} />} />
       </div>
 
-      {/* Table */}
+      {}
       <div style={{ overflow: 'auto' }}>
         <table style={{ width: '100%', fontSize: 14, borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>

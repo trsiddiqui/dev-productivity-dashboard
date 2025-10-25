@@ -89,7 +89,7 @@ export function LineByDay({ items }: Props): JSX.Element {
               )}
             />
 
-            {/* Distinct colors per series */}
+            {}
             <Line
               type="monotone"
               dataKey="additions"

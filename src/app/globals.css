@@ -2,72 +2,82 @@
 
 @import "tailwindcss";
 
-/* ===== Base tokens (defaults to dark) ===== */
+
 :root,
 [data-theme='dark'] {
-  /* App chrome */
+
   --background: #0a0a0a;
   --foreground: #ededed;
 
-  /* Surfaces / nav */
+
   --surface: #0b0b0b;
   --surface-border: #1f2937;
   --surface-link: #e5e7eb;
 
-  /* Cards */
+
   --card-bg: #0f172a;
   --card-fg: #e5e7eb;
   --card-br: #1f2937;
 
-  /* Subtle text */
+
   --faint-text: #cbd5e1;
 
-  /* Generic tokens used by controls */
+
   --text: var(--foreground);
   --muted: #94a3b8;
   --surface-card: var(--surface);
   --border: var(--surface-border);
 
-  
 
-/* Neutral / planning */
+
+
 .todo-card {
-  background-color: #1F2937; /* slate-800 */
+  background-color: #1F2937;
   color: #FFFFFF;
 }
 
-/* Actively moving */
+
 .in-progress-card {
-  background-color: #1E40AF; /* blue-800 */
+  background-color: #1E40AF;
   color: #FFFFFF;
 }
 
-/* Approved (distinct from done) */
+
 .approved-card {
-  background-color: #115E59; /* teal-800 */
+  background-color: #008d1e;
   color: #FFFFFF;
 }
 
-/* Completed */
+
 .done-card {
-  background-color: #166534; /* green-800 */
+  background-color: #166534;
   color: #FFFFFF;
 }
 
-/* Merged (keeps the GitHub-ish purple cue) */
+
 .merged-card {
-  background-color: #5B21B6; /* violet-800 */
+  background-color: #5B21B6;
   color: #FFFFFF;
 }
 
-/* Blocked / needs attention */
+.review-card {
+  background-color: #85ad00;
+  color: #FFFFFF;
+}
+
+
 .impeded-card {
-  background-color: #991B1B; /* red-800 */
+  background-color: #991B1B;
   color: #FFFFFF;
+}
+
+invalid-card {
+  background-color: #ff0000;
+  color: #757575;
 }
 }
 
-/* ===== Light theme overrides ===== */
+
 [data-theme='light'] {
   --background: #ffffff;
   --foreground: #111827;
@@ -87,53 +97,63 @@
   --surface-card: var(--surface);
   --border: var(--surface-border);
 
-  
 
-/* Neutral / planning */
+
+
 .todo-card {
-  background-color: #8b8b8b; /* slate-800 */
+  background-color: #8b8b8b;
   color: #0a0a0a;
 }
 
-/* Actively moving */
+
 .in-progress-card {
-  background-color: #1E40AF; /* blue-800 */
+  background-color: #1E40AF;
   color: #838383;
 }
 
-/* Approved (distinct from done) */
+
 .approved-card {
-  background-color: #115E59; /* teal-800 */
+  background-color: #115E59;
   color: #888888;
 }
 
-/* Completed */
+
 .done-card {
-  background-color: #166534; /* green-800 */
+  background-color: #166534;
   color: #7f7f7f;
 }
 
-/* Merged (keeps the GitHub-ish purple cue) */
+
 .merged-card {
-  background-color: #5B21B6; /* violet-800 */
+  background-color: #5B21B6;
   color: #797979;
 }
 
-/* Blocked / needs attention */
+
 .impeded-card {
-  background-color: #991B1B; /* red-800 */
+  background-color: #991B1B;
+  color: #757575;
+}
+
+invalid-card {
+  background-color: #ff0000;
+  color: #757575;
+}
+
+.review-card {
+  background-color: #21501f;
   color: #757575;
 }
 }
 
-/* App base */
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Small utilities */
+
 .select-reset {
   appearance: none;
   background: var(--surface);
@@ -144,7 +164,7 @@ body {
   font-size: 14px;
 }
 
-/* Tiny chevron for the theme dropdown */
+
 .select-wrapper { position: relative; }
 .select-wrapper::after {
   content: "▾";
@@ -156,7 +176,7 @@ body {
   color: var(--surface-link);
 }
 
-/* Nav bar */
+
 .app-nav {
   display: flex;
   gap: 16px;
