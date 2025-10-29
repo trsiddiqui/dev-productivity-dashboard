@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
         'Analyzing ticket history',
         'Fetching PRs & LOC',
         'Computing KPIs & burn',
+        'Getting ticket history from Jira',
+        'Getting linked PRs from Jira',
+        'Getting QA Assignments from Jira',
       ];
 
       let pct = 0;
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
         progress(pct, stages[stageIdx]);
       };
 
-      const timer = setInterval(tick, 700);
+      const timer = setInterval(tick, 1500);
 
 
       const resp = await fetch(apiUrl, {

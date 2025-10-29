@@ -8,8 +8,6 @@ import type {
   LinkedPR,
 } from './types';
 
-
-
 interface JiraUser { accountId: string; displayName: string; emailAddress?: string }
 interface JiraStatus { name?: string }
 interface JiraIssueFields {
@@ -69,7 +67,7 @@ async function runJQL(params: {
         ].filter(Boolean);
         detail = msgs.join('; ');
       } catch {
-        try { detail = await resp.text(); } catch {  }
+        try { detail = await resp.text(); } catch { /* noop */ }
       }
       throw new Error(`JIRA enhanced search failed with ${resp.status}${detail ? `: ${detail}` : ''}`);
     }
@@ -383,7 +381,7 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     if (!resp.ok) break;
 
     const data = (await resp.json()) as { issues?: Array<{
-      id: string; key: string; fields: any;
+      id: string; key: string; fields: JiraAgileIssueFields;
     }> };
     const list = data.issues ?? [];
 
@@ -391,11 +389,13 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
       const typeName = it.fields.issuetype?.name?.toLowerCase() ?? '';
       if (!allowed.has(typeName)) continue;
 
-      const spVal = (it.fields as Record<string, unknown>)[cfg.jiraStoryPointsField];
+      const spVal = it.fields[cfg.jiraStoryPointsField];
       const storyPoints = typeof spVal === 'number' ? spVal : undefined;
-      const epicKey = (it.fields as Record<string, unknown>)['customfield_10014'] as string | undefined;
+      const epicKey = it.fields['customfield_10014'] as string | undefined;
 
-      const qaAssignees = cfg.jiraQAAssigneeField ? parseQAAssignees((it.fields as any)[cfg.jiraQAAssigneeField]) : undefined;
+      const qaAssignees = cfg.jiraQAAssigneeField
+        ? parseQAAssignees(it.fields[cfg.jiraQAAssigneeField])
+        : undefined;
       const description = adfToPlain(it.fields.description);
 
       out.push({
@@ -439,7 +439,7 @@ export async function getJiraSprintScopeChanges(
     if (!text) return false;
     const m = text.match(/\bid\s*=\s*(\d+)\b/);
     return !!(m && m[1] === String(sprintId));
-    }
+  }
 
   for (const key of issueKeys) {
     try {
@@ -485,7 +485,7 @@ export async function getJiraSprintScopeChanges(
       else if (wasInAtStart) result[key] = 'committed';
       else result[key] = 'committed';
     } catch {
-
+      // ignore per-issue failures
     }
   }
 
@@ -541,7 +541,7 @@ export async function getIssuePhaseTimes(
 
       out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst };
     } catch {
-
+      // ignore per-issue failures
     }
   }
   return out;
@@ -590,7 +590,6 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
   return result;
 }
 
-
 export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<string, string[]>> {
   if (parentKeys.length === 0) return {};
   const base = normalizedBase();
@@ -612,7 +611,6 @@ export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<st
   }
   return map;
 }
-
 
 export async function getJiraIssuesUpdated(params: {
   assignee: string;
@@ -642,7 +640,6 @@ export async function getJiraIssuesUpdated(params: {
     ? `AND project = ${projectKey}`
     : (envProjects.length ? `AND project in (${envProjects.join(',')})` : '');
 
-
   const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
 
   const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
@@ -666,7 +663,6 @@ export async function getJiraIssuesUpdated(params: {
 
     const assigneeField = issue.fields.assignee;
     const assigneeName = assigneeField?.displayName ?? assigneeField?.emailAddress ?? '';
-
 
     if (!jiraAccountId) {
       const matches = assigneeName.toLowerCase().includes(assignee.toLowerCase());
@@ -752,20 +748,22 @@ export async function getQAAssignmentTimesAll(
         }
       }
     } catch {
-
+      // ignore per-issue failures
     }
   }
   return out;
 }
 
-
 function parseQAAssignees(val: unknown): Array<{ id?: string; name: string }> | undefined {
   if (!val) return undefined;
+
   if (Array.isArray(val)) {
     const arr = val
-      .map((v: any) => {
+      .map((v): { id?: string; name: string } | null => {
         if (v && typeof v === 'object') {
-          return { id: v.accountId as string | undefined, name: (v.displayName || v.name || '').toString() };
+          const o = v as { accountId?: string; displayName?: string; name?: string };
+          const name = (o.displayName || o.name || '').toString();
+          return name ? { id: o.accountId, name } : null;
         }
         if (typeof v === 'string') return { name: v };
         return null;
@@ -773,34 +771,45 @@ function parseQAAssignees(val: unknown): Array<{ id?: string; name: string }> | 
       .filter((x): x is { id?: string; name: string } => !!x && !!x.name);
     return arr.length ? arr : undefined;
   }
+
   if (typeof val === 'object') {
-    const o = val as any;
-    if (o.displayName || o.name) return [{ id: o.accountId as string | undefined, name: (o.displayName || o.name).toString() }];
+    const o = val as { accountId?: string; displayName?: string; name?: string };
+    const nm = (o.displayName || o.name || '').toString();
+    if (nm) return [{ id: o.accountId, name: nm }];
   }
+
   if (typeof val === 'string') {
     const parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
     return parts.length ? parts.map(name => ({ name })) : undefined;
   }
+
   return undefined;
 }
 
 function adfToPlain(input: unknown): string | undefined {
   if (!input) return undefined;
   if (typeof input === 'string') return input;
+
+  const walk = (n: unknown): string => {
+    if (!n) return '';
+    if (typeof n === 'string') return n;
+
+    if (Array.isArray(n)) {
+      return n.map(walk).join('');
+    }
+
+    if (typeof n === 'object') {
+      const obj = n as { type?: string; text?: string; content?: unknown };
+      if (obj.type === 'text' && typeof obj.text === 'string') return obj.text;
+      const content = Array.isArray(obj.content) ? obj.content.map(walk).join('') : '';
+      if (obj.type === 'paragraph') return content + '\n';
+      return content;
+    }
+
+    return '';
+  };
+
   try {
-    const walk = (n: any): string => {
-      if (!n) return '';
-      if (typeof n === 'string') return n;
-      if (Array.isArray(n)) return n.map(walk).join('');
-      if (typeof n === 'object') {
-        const type = n.type;
-        if (type === 'text' && typeof n.text === 'string') return n.text;
-        const content = Array.isArray(n.content) ? n.content.map(walk).join('') : '';
-        if (type === 'paragraph') return content + '\n';
-        return content;
-      }
-      return '';
-    };
     const s = walk(input).replace(/\n{3,}/g, '\n\n').trim();
     return s || undefined;
   } catch {
