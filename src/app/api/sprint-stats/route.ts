@@ -30,7 +30,7 @@ const INPROGRESS_STATUS_NAMES = ['In Progress', 'Merged', 'In Development', 'In-
 const QA_STATUS_NAMES = ['Reviewed', 'Review', 'In Review'];
 const COMPLETE_STATUS_NAMES = ['Done', 'Approved'];
 
-const REVIEW_SET = new Set(QA_STATUS_NAMES.map((s) => s.toLowerCase()));
+const REVIEW_SET = new Set(QA_STATUS_NAMES.concat(COMPLETE_STATUS_NAMES).map((s) => s.toLowerCase()));
 
 
 const toDateOnly = (iso?: string): string | undefined => (iso ? iso.slice(0, 10) : undefined);

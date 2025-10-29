@@ -192,7 +192,7 @@ function Pill({
 
 export default function SprintPage(): JSX.Element {
 
-  const [boardId, setBoardId] = useState<string>("");
+  const [boardId, setBoardId] = useState<string>("126");
   const [sprints, setSprints] = useState<JiraSprintLite[]>([]);
   const [sprintId, setSprintId] = useState<string>("");
   const [loadingSprints, setLoadingSprints] = useState<boolean>(false);
@@ -1278,7 +1278,7 @@ function QATicketRow({ issue, qa }: { issue: JiraIssue; qa: { id?: string; name:
       ? assignedAt : reviewStart;
     return Math.max(0, (new Date(issue.completeAt).getTime() - new Date(start).getTime()) / 36e5);
   })();
-  
+
   const statusSlug = toSlug(issue.status)
 
   return (

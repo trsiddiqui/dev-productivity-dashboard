@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-
+#./dump-code.zsh > ./code_dump.txt
 
 
 set -euo pipefail
