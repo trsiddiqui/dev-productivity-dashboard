@@ -741,7 +741,7 @@ export async function getQAAssignmentTimesAll(
           const fromIds = new Set((it.from ?? '').toString().split(/[,;]+/).map(s => s.trim()).filter(Boolean));
           for (const id of toIds) {
             if (!fromIds.has(id)) {
-              const k = `id:${id}`;
+              const k = `id:${id}`.replace(/[\[\]']+/g,'');
               if (targets.has(k) && !out[row.key][k]) out[row.key][k] = h.created;
             }
           }
