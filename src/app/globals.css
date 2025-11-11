@@ -18,6 +18,15 @@
   --card-bg: #0f172a;
   --card-fg: #e5e7eb;
   --card-br: #1f2937;
+  --panel-bg: #0b0b0b;
+  --panel-fg: #e5e7eb;
+  --panel-br: #1f2937;
+  --panel-muted: #94a3b8;
+  --kpi-bg: #0f172a;
+  --kpi-fg: #e5e7eb;
+  --kpi-br: #1f2937;
+  --tooltip-bg: #111827;
+  --tooltip-fg: #e5e7eb;
 
 
   --faint-text: #cbd5e1;
@@ -86,9 +95,18 @@ invalid-card {
   --surface-border: #e5e7eb;
   --surface-link: #111827;
 
-  --card-bg: #c3c3c3;
+  --card-bg: #f9fafb;
   --card-fg: #111827;
   --card-br: #e5e7eb;
+  --panel-bg: #ffffff;
+  --panel-fg: #111827;
+  --panel-br: #e5e7eb;
+  --panel-muted: #64748b;
+  --kpi-bg: #ffffff;
+  --kpi-fg: #111827;
+  --kpi-br: #e5e7eb;
+  --tooltip-bg: #1e293b;
+  --tooltip-fg: #f8fafc;
 
   --faint-text: #64748b;
 

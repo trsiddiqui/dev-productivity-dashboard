@@ -56,9 +56,9 @@ export function PRLifecycleView({
 
   const thBase: React.CSSProperties = {
     padding: '10px 12px',
-    borderRight: '1px solid #1f2937',
-    background: '#0b0b0b',
-    color: '#e5e7eb',
+    borderRight: '1px solid var(--panel-br)',
+    background: 'var(--panel-bg)',
+    color: 'var(--panel-fg)',
     position: 'sticky',
     top: 0,
     zIndex: 1,
@@ -68,12 +68,12 @@ export function PRLifecycleView({
 
   const tdStyle: React.CSSProperties = {
     padding: '10px 12px',
-    borderRight: '1px solid #1f2937',
+    borderRight: '1px solid var(--panel-br)',
     verticalAlign: 'top',
   };
 
   return (
-    <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
       <h2 style={{ fontWeight: 600, marginBottom: 12 }}>PR Lifecycle</h2>
 
       {}
@@ -89,7 +89,7 @@ export function PRLifecycleView({
       <div style={{ overflow: 'auto' }}>
         <table style={{ width: '100%', fontSize: 14, borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid #1f2937' }}>
+            <tr style={{ borderBottom: '1px solid var(--panel-br)' }}>
               <th style={thLeft}>PR</th>
               <th style={thRight}>Additions</th>
               <th style={thRight}>Deletions</th>
@@ -109,7 +109,7 @@ export function PRLifecycleView({
           </thead>
           <tbody>
             {items.map(i => (
-              <tr key={i.id} style={{ borderBottom: '1px solid #111827' }}>
+              <tr key={i.id} style={{ borderBottom: '1px solid var(--panel-br)' }}>
                 <td style={tdStyle}>
                   <a href={i.url} target="_blank" rel="noreferrer">
                     #{i.number} {i.title}
@@ -154,19 +154,19 @@ export function PRLifecycleView({
 
                 <td style={tdStyle}>
                   {i.state === 'MERGED' ? (
-                    <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: 999, fontSize: 12 }}>
+                    <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
                       Merged
                     </span>
                   ) : i.state === 'CLOSED' ? (
-                    <span style={{ padding: '2px 8px', background: '#fef2f2', color: '#991b1b', borderRadius: 999, fontSize: 12 }}>
+                    <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
                       Closed
                     </span>
                   ) : i.isDraft ? (
-                    <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12 }}>
+                    <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
                       Draft
                     </span>
                   ) : (
-                    <span style={{ padding: '2px 8px', background: '#eff6ff', color: '#1e40af', borderRadius: 999, fontSize: 12 }}>
+                    <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
                       Open
                     </span>
                   )}
@@ -219,9 +219,9 @@ export function PRLifecycleView({
 
 function Kpi({ label, value }: { label: string; value: React.ReactNode }): JSX.Element {
   return (
-    <div style={{ background: '#0f172a', borderRadius: 12, padding: 12, border: '1px solid #1f2937' }}>
-      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: '#e5e7eb' }}>{value}</div>
+    <div style={{ background: 'var(--kpi-bg)', borderRadius: 12, padding: 12, border: '1px solid var(--kpi-br)' }}>
+      <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--kpi-fg)' }}>{value}</div>
     </div>
   );
 }
