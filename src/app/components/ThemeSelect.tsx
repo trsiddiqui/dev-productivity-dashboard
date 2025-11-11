@@ -19,9 +19,18 @@ function applyTheme(theme: Theme) {
 }
 
 export default function ThemeSelect() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  // Start with a deterministic value to avoid SSR/client mismatches.
+  const [theme, setTheme] = useState<Theme>('light');
 
+  // On mount, detect the real theme (localStorage / media) and then update.
   useEffect(() => {
+    const initial = getInitialTheme();
+    setTheme(initial);
+  }, []);
+
+  // Apply theme and persist whenever it changes on the client.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     applyTheme(theme);
     window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
