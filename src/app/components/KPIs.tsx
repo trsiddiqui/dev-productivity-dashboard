@@ -7,8 +7,8 @@ interface KPIItem { label: string; value: number }
 export function KPIsView({ kpis }: { kpis: KPIs }) {
   const items: KPIItem[] = [
     { label: 'PRs', value: kpis.totalPRs },
-    { label: 'Tickets', value: kpis.totalTicketsDone },
-    { label: 'Story Points', value: kpis.totalStoryPoints },
+    // { label: 'Tickets', value: kpis.totalTicketsDone },
+    // { label: 'Story Points', value: kpis.totalStoryPoints },
     { label: 'Additions', value: kpis.totalAdditions },
     { label: 'Deletions', value: kpis.totalDeletions },
   ];

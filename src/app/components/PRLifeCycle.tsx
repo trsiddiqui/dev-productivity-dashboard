@@ -167,6 +167,10 @@ export function PRLifecycleView({
     return list;
   }, [items, sortMain, jiraMaps]);
 
+  // Totals for main table (PRs)
+  const totalLocChanged = React.useMemo(() => items.reduce((a, i) => a + (i.additions ?? 0) + (i.deletions ?? 0), 0), [items]);
+  const totalStoryPointsMain = React.useMemo(() => items.reduce((a, i) => a + (jiraMaps.storyPoints.get(i.jiraKey ?? '') ?? 0), 0), [items, jiraMaps]);
+
   const ticketOnly = React.useMemo(() => tickets.filter(t => !(t.linkedPRs ?? []).length && !!t.updatedBySelectedUserInWindow), [tickets]);
   const sortedTicketOnly = React.useMemo(() => {
     const list = [...ticketOnly];
@@ -182,6 +186,9 @@ export function PRLifecycleView({
     });
     return list;
   }, [ticketOnly, sortTickets]);
+
+  // Totals for ticket-only table
+  const totalStoryPointsTickets = React.useMemo(() => ticketOnly.reduce((a, t) => a + (t.storyPoints ?? 0), 0), [ticketOnly]);
 
   const SortIndicator = ({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) => active ? <span style={{ marginLeft: 4 }}>{dir === 'asc' ? '▲' : '▼'}</span> : null;
 
@@ -272,6 +279,18 @@ export function PRLifecycleView({
                 </td>
               </tr>
             ))}
+            {/* Total row (not part of sorting) */}
+            <tr style={{ background: 'var(--panel-bg-alt, #1e293b)' }}>
+              <td style={tdStyle}><strong>Total</strong></td>
+              <td style={tdStyle}>—</td>
+              <td style={tdStyle}>—</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalLocChanged} /></strong></td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalStoryPointsMain} /></strong></td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+              <td style={{ ...tdStyle, borderRight: 'none' }}>—</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -314,6 +333,14 @@ export function PRLifecycleView({
                     </tr>
                   );
                 })}
+                {/* Total row for ticket-only table */}
+                <tr style={{ background: 'var(--panel-bg-alt, #1e293b)' }}>
+                  <td style={tdStyle}><strong>Total</strong></td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalStoryPointsTickets} /></strong></td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={tdStyle}>—</td>
+                </tr>
               </tbody>
             </table>
           </div>
