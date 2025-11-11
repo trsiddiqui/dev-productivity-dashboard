@@ -20,8 +20,7 @@ const palette = {
   additions: '#22c55e',     // green
   deletions: '#ef4444',     // red
   prs: '#60a5fa',           // blue
-  storyPoints: '#f59e0b',   // amber
-  tickets: '#a78bfa',       // violet
+  // Removed storyPoints and tickets from chart per new requirement
   grid: '#334155',
   axis: '#94a3b8',
 };
@@ -64,8 +63,7 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
         <div><span style={{ color: palette.additions }}>Additions</span> : {formatNum(map.get('Additions') ?? 0)}</div>
         <div><span style={{ color: palette.deletions }}>Deletions</span> : {formatNum(map.get('Deletions') ?? 0)}</div>
         <div><span style={{ color: palette.prs }}>PRs</span> : {formatNum(map.get('PRs') ?? 0)}</div>
-        <div><span style={{ color: palette.storyPoints }}>Story Points</span> : {formatNum(map.get('Story Points') ?? 0)}</div>
-        <div><span style={{ color: palette.tickets }}>Tickets</span> : {formatNum(map.get('Tickets') ?? 0)}</div>
+  {/* Story Points and Tickets removed from tooltip */}
       </div>
     </div>
   );
@@ -117,24 +115,7 @@ export function LineByDay({ items }: Props): JSX.Element {
               dot={false}
               activeDot={{ r: 4 }}
             />
-            <Line
-              type="monotone"
-              dataKey="storyPoints"
-              name="Story Points"
-              stroke={palette.storyPoints}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="tickets"
-              name="Tickets"
-              stroke={palette.tickets}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
+            {/* Removed Story Points and Tickets lines */}
           </LineChart>
         </ResponsiveContainer>
       </div>
