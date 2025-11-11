@@ -76,6 +76,9 @@ export interface JiraIssue {
   prAdditions?: number;
   prDeletions?: number;
   prReviewComments?: number;
+
+  // True if, within selected window, the selected Jira user authored any changelog entry on this ticket
+  updatedBySelectedUserInWindow?: boolean;
 }
 
 export interface KPIs {
@@ -103,6 +106,12 @@ export interface PRLifecycle {
   title: string;
   url: string;
   createdAt: string;
+  // When linked Jira ticket moved from To Do to In Progress
+  workStartedAt?: string | null;
+  // Linked Jira ticket metadata (primary association)
+  jiraKey?: string;
+  jiraSummary?: string;
+  jiraUrl?: string;
   readyForReviewAt?: string | null;
   firstReviewAt?: string | null;
   mergedAt?: string | null;
@@ -119,6 +128,8 @@ export interface PRLifecycle {
   timeToFirstReviewHours?: number | null;
   reviewToMergeHours?: number | null;
   cycleTimeHours?: number | null;
+  // Difference between Work Started (Jira In Progress) and PR Created
+  inProgressToCreatedHours?: number | null;
 }
 
 export interface LifecycleStats {
@@ -127,6 +138,7 @@ export interface LifecycleStats {
   medianTimeToFirstReviewHours?: number | null;
   medianReviewToMergeHours?: number | null;
   medianCycleTimeHours?: number | null;
+  medianInProgressToCreatedHours?: number | null;
 }
 
 export interface StatsResponse {

@@ -3,7 +3,6 @@
 import { JSX, useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import type {
-  JiraIssue,
   StatsResponse,
   UsersResponse,
   GithubUser,
@@ -46,12 +45,13 @@ export default function Page(): JSX.Element {
         if (!ghLogin && json.github.length > 0) setGhLogin(json.github[0].login);
         if (!jiraAccountId && json.jira.length > 0) setJiraAccountId(json.jira[0].accountId);
       } catch {
-
+        // ignore
       } finally {
         setLoadingUsers(false);
       }
     })();
-
+    // Intentionally run only once: we guard assignments with conditionals
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -245,7 +245,7 @@ export default function Page(): JSX.Element {
           {data.lifecycle && (
             <>
               <div style={{ height: 12 }} />
-              <PRLifecycleView items={data.lifecycle.items} stats={data.lifecycle.stats} />
+              <PRLifecycleView items={data.lifecycle.items} stats={data.lifecycle.stats} tickets={data.tickets} />
             </>
           )}
         </>

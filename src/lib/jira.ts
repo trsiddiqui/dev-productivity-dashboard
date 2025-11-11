@@ -279,11 +279,7 @@ interface JiraAgileIssueFields {
   [key: string]: unknown;
 }
 
-interface JiraAgileIssue {
-  id: string;
-  key: string;
-  fields: JiraAgileIssueFields;
-}
+// (unused placeholder removed)
 
 function jiraAuthHeader(): string {
   return 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
@@ -494,8 +490,9 @@ export async function getJiraSprintScopeChanges(
 
 export async function getIssuePhaseTimes(
   issueKeys: string[],
-  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[] }
-): Promise<Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string }>> {
+  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[] },
+  opts?: { from?: string; to?: string; actorAccountId?: string }
+): Promise<Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }>> {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
@@ -505,7 +502,10 @@ export async function getIssuePhaseTimes(
   const reviewSet = new Set(stages.review.map(norm));
   const completeSet = new Set(stages.complete.map(norm));
 
-  const out: Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string }> = {};
+  const out: Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }> = {};
+  const fromMs = opts?.from ? new Date(opts.from).getTime() : NaN;
+  const toMs = opts?.to ? new Date(opts.to).getTime() : NaN;
+  const actorId = opts?.actorAccountId;
 
   for (const key of issueKeys) {
     try {
@@ -519,7 +519,7 @@ export async function getIssuePhaseTimes(
       if (!resp.ok) continue;
       const data = await resp.json() as {
         fields?: { created?: string; status?: { name?: string } };
-        changelog?: { histories?: Array<{ created?: string; items?: Array<{ field?: string; toString?: string }> }> };
+        changelog?: { histories?: Array<{ created?: string; author?: { accountId?: string }; items?: Array<{ field?: string; toString?: string }> }> };
       };
 
       let todoFirst: string | undefined = data.fields?.created;
@@ -527,8 +527,13 @@ export async function getIssuePhaseTimes(
       let reviewFirst: string | undefined;
       let completeFirst: string | undefined;
 
+      let updatedByActor = false;
       for (const h of (data.changelog?.histories ?? [])) {
         const when = h.created;
+        const whenMs = when ? new Date(when).getTime() : NaN;
+        const inRange = Number.isFinite(fromMs) && Number.isFinite(toMs)
+          ? (Number.isFinite(whenMs) && whenMs >= fromMs && whenMs <= (toMs + 24*60*60*1000 - 1))
+          : false;
         for (const it of (h.items ?? [])) {
           if (it.field !== 'status' || !it.toString) continue;
           const to = norm(it.toString);
@@ -537,9 +542,12 @@ export async function getIssuePhaseTimes(
           if (!completeFirst && completeSet.has(to)) completeFirst = when;
           if (!todoFirst && todoSet.has(to)) todoFirst = when;
         }
+        if (!updatedByActor && inRange && actorId && h.author?.accountId === actorId) {
+          updatedByActor = true;
+        }
       }
 
-      out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst };
+      out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst, updatedByActorInWindow: updatedByActor };
     } catch {
       // ignore per-issue failures
     }

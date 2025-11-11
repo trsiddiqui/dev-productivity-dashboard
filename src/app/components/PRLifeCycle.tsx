@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { PRLifecycle, LifecycleStats } from '../../lib/types';
+import type { PRLifecycle, LifecycleStats, JiraIssue } from '../../lib/types';
 import { JSX } from 'react';
 
 function Hrs({ v }: { v?: number | null }): JSX.Element {
@@ -47,9 +47,11 @@ function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
 export function PRLifecycleView({
   items,
   stats,
+  tickets = [],
 }: {
   items: PRLifecycle[];
   stats: LifecycleStats;
+  tickets?: JiraIssue[];
 }): JSX.Element {
 
   const thBase: React.CSSProperties = {
@@ -75,11 +77,12 @@ export function PRLifecycleView({
       <h2 style={{ fontWeight: 600, marginBottom: 12 }}>PR Lifecycle</h2>
 
       {}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
         <Kpi label="Median Time to Ready" value={<Hrs v={stats.medianTimeToReadyHours} />} />
         <Kpi label="Median Time to First Review" value={<Hrs v={stats.medianTimeToFirstReviewHours} />} />
         <Kpi label="Median Review → Merge" value={<Hrs v={stats.medianReviewToMergeHours} />} />
         <Kpi label="Median Cycle Time" value={<Hrs v={stats.medianCycleTimeHours} />} />
+        <Kpi label="Median In Progress → Created" value={<Hrs v={stats.medianInProgressToCreatedHours} />} />
       </div>
 
       {}
@@ -90,6 +93,8 @@ export function PRLifecycleView({
               <th style={thLeft}>PR</th>
               <th style={thRight}>Additions</th>
               <th style={thRight}>Deletions</th>
+              <th style={thLeft}>Jira Ticket</th>
+              <th style={thRight}>Work Started</th>
               <th style={thRight}>Created</th>
               <th style={thRight}>Ready</th>
               <th style={thRight}>First Review</th>
@@ -118,6 +123,19 @@ export function PRLifecycleView({
                   <Num v={i.deletions} />
                 </td>
 
+                <td style={tdStyle}>
+                  {i.jiraUrl ? (
+                    <a href={i.jiraUrl} target="_blank" rel="noreferrer">
+                      {i.jiraKey} {i.jiraSummary ? `— ${i.jiraSummary}` : ''}
+                    </a>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </td>
+
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <DateTwoLine iso={i.workStartedAt ?? null} />
+                </td>
                 <td style={{ ...tdStyle, textAlign: 'right' }}>
                   <DateTwoLine iso={i.createdAt} />
                 </td>
@@ -160,6 +178,38 @@ export function PRLifecycleView({
                 <td style={{ ...tdStyle, borderRight: 'none' }}><Hrs v={i.cycleTimeHours} /></td>
               </tr>
             ))}
+
+            {/* Ticket-only rows (no PR) */}
+            {tickets
+              .filter(t => !(t.linkedPRs ?? []).length && !!t.updatedBySelectedUserInWindow) // only those without PR associations and updated by selected user in window
+              .map(t => (
+                <tr key={`ticket:${t.key}`} style={{ borderBottom: '1px solid #111827' }}>
+                  <td style={tdStyle}>—</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={tdStyle}>
+                    <a href={t.url} target="_blank" rel="noreferrer">{t.key} — {t.summary}</a>
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <DateTwoLine iso={t.inProgressAt ?? null} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <DateTwoLine iso={t.created ?? null} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
+                  <td style={tdStyle}>
+                    <span style={{ padding: '2px 8px', background: '#111827', color: '#e5e7eb', borderRadius: 999, fontSize: 12 }}>
+                      {t.status ?? '—'}
+                    </span>
+                  </td>
+                  <td style={tdStyle}>—</td>
+                  <td style={tdStyle}>—</td>
+                  <td style={tdStyle}>—</td>
+                  <td style={{ ...tdStyle, borderRight: 'none' }}>—</td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
