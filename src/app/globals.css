@@ -5,15 +5,12 @@
 
 :root,
 [data-theme='dark'] {
-
   --background: #0a0a0a;
   --foreground: #ededed;
-
 
   --surface: #0b0b0b;
   --surface-border: #1f2937;
   --surface-link: #e5e7eb;
-
 
   --card-bg: #0f172a;
   --card-fg: #e5e7eb;
@@ -28,62 +25,22 @@
   --tooltip-bg: #111827;
   --tooltip-fg: #e5e7eb;
 
-
   --faint-text: #cbd5e1;
-
 
   --text: var(--foreground);
   --muted: #94a3b8;
   --surface-card: var(--surface);
   --border: var(--surface-border);
 
-
-
-
-.todo-card {
-  background-color: #1F2937;
-  color: #FFFFFF;
-}
-
-
-.in-progress-card {
-  background-color: #1E40AF;
-  color: #FFFFFF;
-}
-
-
-.approved-card {
-  background-color: #008d1e;
-  color: #FFFFFF;
-}
-
-
-.done-card {
-  background-color: #166534;
-  color: #FFFFFF;
-}
-
-
-.merged-card {
-  background-color: #5B21B6;
-  color: #FFFFFF;
-}
-
-.review-card {
-  background-color: #85ad00;
-  color: #FFFFFF;
-}
-
-
-.impeded-card {
-  background-color: #991B1B;
-  color: #FFFFFF;
-}
-
-invalid-card {
-  background-color: #ff0000;
-  color: #757575;
-}
+  /* Dark theme status colors */
+  .todo-card { background-color: #1F2937; color: #FFFFFF; }
+  .in-progress-card { background-color: #1E40AF; color: #FFFFFF; }
+  .approved-card { background-color: #008d1e; color: #FFFFFF; }
+  .done-card { background-color: #166534; color: #FFFFFF; }
+  .merged-card { background-color: #5B21B6; color: #FFFFFF; }
+  .review-card { background-color: #85ad00; color: #FFFFFF; }
+  .impeded-card { background-color: #991B1B; color: #FFFFFF; }
+  .invalid-card { background-color: #ff0000; color: #757575; }
 }
 
 
@@ -115,53 +72,55 @@ invalid-card {
   --surface-card: var(--surface);
   --border: var(--surface-border);
 
-
-
-
-.todo-card {
-  background-color: #8b8b8b;
-  color: #0a0a0a;
+  /* Light theme status colors */
+  .todo-card { background-color: #8b8b8b; color: #0a0a0a; }
+  .in-progress-card { background-color: #1E40AF; color: #838383; }
+  .approved-card { background-color: #115E59; color: #888888; }
+  .done-card { background-color: #166534; color: #7f7f7f; }
+  .merged-card { background-color: #5B21B6; color: #797979; }
+  .impeded-card { background-color: #991B1B; color: #757575; }
+  .invalid-card { background-color: #ff0000; color: #757575; }
+  .review-card { background-color: #21501f; color: #757575; }
 }
 
+/* Grey theme: lower contrast than dark, still darker than light */
+[data-theme='grey'] {
+  --background: #1b1d1f; /* base page */
+  --foreground: #cfd3d7; /* softer text */
 
-.in-progress-card {
-  background-color: #1E40AF;
-  color: #838383;
-}
+  --surface: #212427; /* panels/cards */
+  --surface-border: #2d3236; /* subtle border */
+  --surface-link: #cfd3d7; /* muted link */
 
+  --card-bg: #25292c;
+  --card-fg: #cfd3d7;
+  --card-br: #2d3236;
+  --panel-bg: #212427;
+  --panel-fg: #cfd3d7;
+  --panel-br: #2d3236;
+  --panel-muted: #8a9198;
+  --kpi-bg: #25292c;
+  --kpi-fg: #cfd3d7;
+  --kpi-br: #2d3236;
+  --tooltip-bg: #2a2f33;
+  --tooltip-fg: #d9dde1;
 
-.approved-card {
-  background-color: #115E59;
-  color: #888888;
-}
+  --faint-text: #8a9198;
 
+  --text: var(--foreground);
+  --muted: #8a9198;
+  --surface-card: var(--surface);
+  --border: var(--surface-border);
 
-.done-card {
-  background-color: #166534;
-  color: #7f7f7f;
-}
-
-
-.merged-card {
-  background-color: #5B21B6;
-  color: #797979;
-}
-
-
-.impeded-card {
-  background-color: #991B1B;
-  color: #757575;
-}
-
-invalid-card {
-  background-color: #ff0000;
-  color: #757575;
-}
-
-.review-card {
-  background-color: #21501f;
-  color: #757575;
-}
+  /* Desaturated, muted status colors */
+  .todo-card { background-color: #343a40; color: #cfd3d7; }
+  .in-progress-card { background-color: #3a557a; color: #cfd3d7; }
+  .approved-card { background-color: #3a6a66; color: #cfd3d7; }
+  .done-card { background-color: #345d46; color: #cfd3d7; }
+  .merged-card { background-color: #524970; color: #cfd3d7; }
+  .review-card { background-color: #556247; color: #cfd3d7; }
+  .impeded-card { background-color: #7a4646; color: #cfd3d7; }
+  .invalid-card { background-color: #6e4a4a; color: #cfd3d7; }
 }
 
 

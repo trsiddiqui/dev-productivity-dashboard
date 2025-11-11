@@ -2,15 +2,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Cloud } from 'lucide-react';
 
-type Theme = 'light' | 'dark';
+type Theme = 'light' | 'dark' | 'grey';
 const STORAGE_KEY = 'theme';
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
   const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (saved === 'light' || saved === 'dark') return saved as Theme;
+  if (saved === 'light' || saved === 'dark' || saved === 'grey') return saved as Theme;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -26,17 +26,15 @@ export default function ThemeSelect() {
     window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-  const isDark = theme === 'dark';
+  const toggle = () => setTheme((t) => (t === 'light' ? 'grey' : t === 'grey' ? 'dark' : 'light'));
+  const icon = theme === 'dark' ? <Moon size={16} aria-hidden /> : theme === 'grey' ? <Cloud size={16} aria-hidden /> : <Sun size={16} aria-hidden />;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
       <span style={{ fontSize: 12, color: 'var(--faint-text)' }}>Theme</span>
       <button
         onClick={toggle}
-        role="switch"
-        aria-checked={isDark}
-        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-label={`Switch theme (current: ${theme})`}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -52,8 +50,8 @@ export default function ThemeSelect() {
           boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}
       >
-        {isDark ? <Moon size={16} aria-hidden /> : <Sun size={16} aria-hidden />}
-        <span style={{ fontSize: 12 }}>{isDark ? 'Dark' : 'Light'}</span>
+        {icon}
+        <span style={{ fontSize: 12 }}>{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
       </button>
     </div>
   );
