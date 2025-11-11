@@ -106,9 +106,11 @@ export async function GET(req: Request) {
     });
 
 
-    // Only count tickets in one of the allowed active/done-like states for KPIs
-    const allowedStatuses = new Set(['In Progress', 'Merged', 'Review', 'Approved', 'Done']);
-    const kpiTickets = jiraIssues.filter(i => i.status && allowedStatuses.has(i.status));
+  // Only count tickets in one of the allowed active/done-like states for KPIs
+  // Normalize status to be robust to spacing/case/hyphens and common variants (e.g., In-Progress, In Review, Reviewed)
+  const norm = (s?: string) => (s ?? '').toLowerCase().replace(/\s+|-/g, '');
+  const allowed = new Set(['inprogress', 'merged', 'review', 'approved', 'done', 'inreview', 'reviewed']);
+  const kpiTickets = jiraIssues.filter(i => allowed.has(norm(i.status)));
 
     const kpis: KPIs = {
       totalPRs: prsLinked.length,
