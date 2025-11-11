@@ -248,21 +248,6 @@ export default function Page(): JSX.Element {
               <PRLifecycleView items={data.lifecycle.items} stats={data.lifecycle.stats} />
             </>
           )}
-
-          {}
-          <div style={{ background: 'white', borderRadius: 12, padding: 16, marginTop: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
-            <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Tickets</h2>
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {data.tickets.map((t: JiraIssue) => (
-                <li key={t.id} style={{ marginBottom: 6 }}>
-                  <a href={t.url} target="_blank" rel="noreferrer">{t.key}</a>
-                  {` — `}
-                  {t.status ? <span style={{ padding: '2px 8px', background: '#eef2ff', color: '#3730a3', borderRadius: 999, fontSize: 12, marginRight: 6 }}>{t.status}</span> : null}
-                  {t.summary} {t.storyPoints ? ` (${t.storyPoints} SP)` : ''}
-                </li>
-              ))}
-            </ul>
-          </div>
         </>
       )}
     </div>
