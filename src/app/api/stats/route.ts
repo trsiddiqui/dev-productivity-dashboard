@@ -106,10 +106,14 @@ export async function GET(req: Request) {
     });
 
 
+    // Only count tickets in one of the allowed active/done-like states for KPIs
+    const allowedStatuses = new Set(['In Progress', 'Merged', 'Review', 'Approved', 'Done']);
+    const kpiTickets = jiraIssues.filter(i => i.status && allowedStatuses.has(i.status));
+
     const kpis: KPIs = {
       totalPRs: prsLinked.length,
-      totalTicketsDone: jiraIssues.length,
-      totalStoryPoints: jiraIssues.reduce<number>((a, i) => a + (i.storyPoints ?? 0), 0),
+      totalTicketsDone: kpiTickets.length,
+      totalStoryPoints: kpiTickets.reduce<number>((a, i) => a + (i.storyPoints ?? 0), 0),
       totalAdditions: prsLinked.reduce<number>((a, p) => a + (p.additions ?? 0), 0),
       totalDeletions: prsLinked.reduce<number>((a, p) => a + (p.deletions ?? 0), 0),
     };

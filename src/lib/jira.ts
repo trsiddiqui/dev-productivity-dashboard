@@ -641,6 +641,8 @@ export async function getJiraIssuesUpdated(params: {
     'created',
     'resolutiondate',
     cfg.jiraStoryPointsField,
+    'parent',
+    'customfield_10014', // Epic Link
   ];
 
   const envProjects = (process.env.JIRA_PROJECTS ?? '').split(',').map(s => s.trim()).filter(Boolean);
@@ -689,6 +691,8 @@ export async function getJiraIssuesUpdated(params: {
       updated: issue.fields.updated,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
+      parentKey: (issue.fields as any)?.parent?.key,
+      epicKey: (issue.fields as any)?.customfield_10014 as (string | undefined),
     });
   }
 
