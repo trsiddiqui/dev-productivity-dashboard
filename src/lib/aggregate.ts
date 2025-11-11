@@ -54,13 +54,24 @@ function median(nums: number[]): number | null {
   return arr.length % 2 ? arr[m] : (arr[m - 1] + arr[m]) / 2;
 }
 
-export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: LifecycleStats } {
+// Optionally pass a map from PR URL to linked Jira "work started" timestamp (inProgressAt)
+export function computeLifecycle(
+  prs: PR[],
+  opts?: {
+    workStartedByPrUrl?: Record<string, string | undefined | null>;
+    jiraMetaByPrUrl?: Record<string, { key?: string; summary?: string; url?: string } | undefined>;
+  }
+): { items: PRLifecycle[]; stats: LifecycleStats } {
+  const workStartedMap = opts?.workStartedByPrUrl ?? {};
+  const jiraMetaMap = opts?.jiraMetaByPrUrl ?? {};
   const items: PRLifecycle[] = prs.map(p => {
     const readyAt = p.readyForReviewAt ?? (p.isDraft ? null : p.createdAt);
     const firstRev = p.firstReviewAt ?? null;
     const mergedAt = p.mergedAt ?? null;
     const closedAt = p.closedAt ?? null;
     const endAt = mergedAt ?? closedAt;
+    const workStartedAt = workStartedMap[p.url] ?? null;
+    const meta = jiraMetaMap[p.url] ?? {};
 
     return {
       id: p.id,
@@ -68,6 +79,10 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
       title: p.title,
       url: p.url,
       createdAt: p.createdAt,
+      workStartedAt,
+      jiraKey: meta.key,
+      jiraSummary: meta.summary,
+      jiraUrl: meta.url,
       readyForReviewAt: readyAt,
       firstReviewAt: firstRev,
       mergedAt,
@@ -83,6 +98,7 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
       timeToFirstReviewHours: diffHours(p.createdAt, firstRev),
       reviewToMergeHours: mergedAt ? diffHours(firstRev ?? readyAt ?? p.createdAt, mergedAt) : null,
       cycleTimeHours: endAt ? diffHours(p.createdAt, endAt) : null,
+      inProgressToCreatedHours: workStartedAt ? diffHours(workStartedAt, p.createdAt) : null,
     };
   });
 
@@ -90,6 +106,7 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
   const toFirst: number[] = items.map(i => i.timeToFirstReviewHours).filter((x): x is number => x !== null && x !== undefined);
   const revToMerge: number[] = items.map(i => i.reviewToMergeHours).filter((x): x is number => x !== null && x !== undefined);
   const cycle: number[] = items.map(i => i.cycleTimeHours).filter((x): x is number => x !== null && x !== undefined);
+  const inProgToCreated: number[] = items.map(i => i.inProgressToCreatedHours).filter((x): x is number => x !== null && x !== undefined);
 
   const stats: LifecycleStats = {
     sampleSize: items.length,
@@ -97,6 +114,7 @@ export function computeLifecycle(prs: PR[]): { items: PRLifecycle[]; stats: Life
     medianTimeToFirstReviewHours: median(toFirst),
     medianReviewToMergeHours: median(revToMerge),
     medianCycleTimeHours: median(cycle),
+    medianInProgressToCreatedHours: median(inProgToCreated),
   };
 
   return { items, stats };
