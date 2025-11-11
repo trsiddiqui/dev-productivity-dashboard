@@ -51,9 +51,9 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
   return (
     <div
       style={{
-        background: '#111827',
-        color: '#e5e7eb',
-        border: '1px solid #1f2937',
+        background: 'var(--tooltip-bg)',
+        color: 'var(--tooltip-fg)',
+        border: '1px solid var(--panel-br)',
         borderRadius: 8,
         padding: '10px 12px',
         boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
@@ -73,7 +73,7 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
 
 export function LineByDay({ items }: Props): JSX.Element {
   return (
-    <div style={{ background: '#0b0b0b', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
       <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Daily Activity</h2>
       <div style={{ width: '100%', height: 320 }}>
         <ResponsiveContainer>

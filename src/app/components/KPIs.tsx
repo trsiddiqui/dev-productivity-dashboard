@@ -18,10 +18,18 @@ export function KPIsView({ kpis }: { kpis: KPIs }) {
       {items.map((it) => (
         <div
           key={it.label}
-          style={{ background: 'white', borderRadius: 12, padding: 16, textAlign: 'center', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}
+          style={{
+            background: 'var(--kpi-bg)',
+            color: 'var(--kpi-fg)',
+            border: '1px solid var(--kpi-br)',
+            borderRadius: 12,
+            padding: 16,
+            textAlign: 'center',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
+          }}
         >
           <div style={{ fontSize: 22, fontWeight: 700 }}>{it.value}</div>
-          <div style={{ fontSize: 12, color: '#555' }}>{it.label}</div>
+          <div style={{ fontSize: 12, color: 'var(--panel-muted)' }}>{it.label}</div>
         </div>
       ))}
     </div>

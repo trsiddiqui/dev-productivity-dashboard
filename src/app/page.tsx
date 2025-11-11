@@ -38,16 +38,16 @@ export default function LoginPage() {
       minHeight: '100dvh',
       display: 'grid',
       placeItems: 'center',
-      background: 'radial-gradient(1000px 600px at 10% 10%, #1f2937 0%, rgba(0,0,0,0) 70%), linear-gradient(180deg, #0a0a0a 0%, #000 100%)'
+      background: 'radial-gradient(1000px 600px at 10% 10%, var(--panel-br) 0%, rgba(0,0,0,0) 70%), linear-gradient(180deg, var(--background) 0%, var(--surface) 100%)'
     }}>
       <div style={{
         width: 360,
-        background: 'var(--surface)',
-        color: 'var(--foreground)',
-        border: '1px solid var(--surface-border)',
+        background: 'var(--panel-bg)',
+        color: 'var(--panel-fg)',
+        border: '1px solid var(--panel-br)',
         borderRadius: 16,
         padding: 24,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.35)'
+        boxShadow: '0 10px 30px rgba(0,0,0,0.15)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 22, fontWeight: 800 }}>Dev Productivity Dashboard</div>
