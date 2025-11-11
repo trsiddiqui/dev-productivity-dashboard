@@ -14,7 +14,7 @@ export function KPIsView({ kpis }: { kpis: KPIs }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
       {items.map((it) => (
         <div
           key={it.label}
