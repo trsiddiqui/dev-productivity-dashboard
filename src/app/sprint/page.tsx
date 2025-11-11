@@ -426,8 +426,8 @@ export default function SprintPage(): JSX.Element {
   }
 
   useEffect(() => {
-    loadSprints();
-
+    void loadSprints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleAssignee(name: string) {
