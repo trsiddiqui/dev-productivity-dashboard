@@ -691,8 +691,8 @@ export async function getJiraIssuesUpdated(params: {
       updated: issue.fields.updated,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
-      parentKey: (issue.fields as any)?.parent?.key,
-      epicKey: (issue.fields as any)?.customfield_10014 as (string | undefined),
+      parentKey: ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key,
+      epicKey: (issue.fields as Record<string, unknown>).customfield_10014 as (string | undefined),
     });
   }
 
