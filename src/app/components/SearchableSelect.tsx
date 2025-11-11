@@ -189,6 +189,7 @@ export function SearchableSelect({
                   }}
                 >
                   {opt.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={opt.iconUrl} alt="" width={20} height={20} style={{ borderRadius: '50%' }} />
                   ) : (
                     <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#e5e7eb' }} />
