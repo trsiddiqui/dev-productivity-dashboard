@@ -245,7 +245,12 @@ export function PRLifecycleView({
                   })()}
                 </td>
                 <td style={tdStyle}>
-                  <a href={i.url} target="_blank" rel="noreferrer">#{i.number}</a>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <a href={i.url} target="_blank" rel="noreferrer" style={{ fontWeight: 500 }}>#{i.number} {i.title}</a>
+                    {i.headRefName && (
+                      <span style={{ fontSize: 11, color: 'var(--panel-muted)', fontFamily: 'monospace' }}>{i.headRefName}</span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ ...tdStyle, textAlign: 'right' }}>
                   <Num v={(i.additions ?? 0) + (i.deletions ?? 0)} />

@@ -78,6 +78,7 @@ export function computeLifecycle(
       number: p.number,
       title: p.title,
       url: p.url,
+      headRefName: p.headRefName,
       createdAt: p.createdAt,
       workStartedAt,
       jiraKey: meta.key,

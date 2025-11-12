@@ -13,6 +13,7 @@ interface GHPullRequestNode {
   number: number;
   title: string;
   url: string;
+  headRefName: string;
   createdAt: string;
   mergedAt: string | null;
   closedAt: string | null;
@@ -51,6 +52,7 @@ export async function getGithubPRsWithStats(params: {
               number
               title
               url
+              headRefName
               createdAt
               mergedAt
               closedAt
@@ -124,6 +126,7 @@ export async function getGithubPRsWithStats(params: {
         number: n.number,
         title: n.title,
         url: n.url,
+        headRefName: n.headRefName,
         createdAt: n.createdAt,
         mergedAt: n.mergedAt,
         closedAt: n.closedAt,
