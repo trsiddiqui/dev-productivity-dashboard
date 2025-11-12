@@ -5,6 +5,8 @@ export interface PR {
   number: number;
   title: string;
   url: string;
+  // Source branch name for the PR
+  headRefName?: string;
 
   createdAt: string;
   mergedAt: string | null;
@@ -105,6 +107,8 @@ export interface PRLifecycle {
   number: number;
   title: string;
   url: string;
+  // Source branch name (for subtitle in PR column)
+  headRefName?: string;
   createdAt: string;
   // When linked Jira ticket moved from To Do to In Progress
   workStartedAt?: string | null;
