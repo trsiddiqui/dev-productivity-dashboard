@@ -4,13 +4,13 @@ import type { KPIs } from '../../lib/types';
 
 interface KPIItem { label: string; value: number }
 
-export function KPIsView({ kpis }: { kpis: KPIs }) {
+export function KPIsView({ kpis, additionsOverride, deletionsOverride }: { kpis: KPIs; additionsOverride?: number; deletionsOverride?: number }) {
   const items: KPIItem[] = [
     { label: 'PRs', value: kpis.totalPRs },
     // { label: 'Tickets', value: kpis.totalTicketsDone },
     // { label: 'Story Points', value: kpis.totalStoryPoints },
-    { label: 'Additions', value: kpis.totalAdditions },
-    { label: 'Deletions', value: kpis.totalDeletions },
+    { label: 'Additions', value: additionsOverride ?? kpis.totalAdditions },
+    { label: 'Deletions', value: deletionsOverride ?? kpis.totalDeletions },
   ];
 
   return (
