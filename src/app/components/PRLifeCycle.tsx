@@ -264,7 +264,20 @@ export function PRLifecycleView({
                 </td>
                 <td style={tdStyle}>
                   {i.jiraUrl ? (
-                    <a href={i.jiraUrl} target="_blank" rel="noreferrer">
+                    <a
+                      href={i.jiraUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={i.jiraSummary ? `${i.jiraKey} — ${i.jiraSummary}` : i.jiraKey || ''}
+                      style={{
+                        display: 'inline-block',
+                        maxWidth: 280,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        verticalAlign: 'top'
+                      }}
+                    >
                       {i.jiraKey} {i.jiraSummary ? `— ${i.jiraSummary}` : ''}
                     </a>
                   ) : (
@@ -284,7 +297,22 @@ export function PRLifecycleView({
                 </td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <a href={i.url} target="_blank" rel="noreferrer" style={{ fontWeight: 500 }}>#{i.number} {i.title}</a>
+                    <a
+                      href={i.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`#${i.number} ${i.title}`}
+                      style={{
+                        fontWeight: 500,
+                        display: 'inline-block',
+                        maxWidth: 280,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      #{i.number} {i.title}
+                    </a>
                     {i.headRefName && (
                       <span style={{ fontSize: 11, color: 'var(--panel-muted)', fontFamily: 'monospace' }}>{i.headRefName}</span>
                     )}
