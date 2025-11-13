@@ -48,10 +48,13 @@ export function PRLifecycleView({
   items,
   stats,
   tickets = [],
+  onFilteredTotalsChange,
 }: {
   items: PRLifecycle[];
   stats: LifecycleStats;
   tickets?: JiraIssue[];
+  // Callback to bubble up filtered additions/deletions totals based on user selection
+  onFilteredTotalsChange?: (totals: { additions: number; deletions: number }) => void;
 }): JSX.Element {
 
   // Lookup maps for Jira fields and parent resolution
@@ -167,9 +170,35 @@ export function PRLifecycleView({
     return list;
   }, [items, sortMain, jiraMaps]);
 
-  // Totals for main table (PRs)
-  const totalLocChanged = React.useMemo(() => items.reduce((a, i) => a + (i.additions ?? 0) + (i.deletions ?? 0), 0), [items]);
-  const totalStoryPointsMain = React.useMemo(() => items.reduce((a, i) => a + (jiraMaps.storyPoints.get(i.jiraKey ?? '') ?? 0), 0), [items, jiraMaps]);
+  // Selection state (all selected by default)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set(items.map(i => i.id)));
+
+  // Keep selection in sync if items array changes (e.g., refetch)
+  React.useEffect(() => {
+    setSelectedIds(new Set(items.map(i => i.id)));
+  }, [items]);
+
+  const toggleSelected = React.useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Filtered list for totals (LOC changed & story points)
+  const filteredItems = React.useMemo(() => items.filter(i => selectedIds.has(i.id)), [items, selectedIds]);
+
+  // Totals for main table (PRs) considering selection
+  const totalLocChanged = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.additions ?? 0) + (i.deletions ?? 0), 0), [filteredItems]);
+  const totalStoryPointsMain = React.useMemo(() => filteredItems.reduce((a, i) => a + (jiraMaps.storyPoints.get(i.jiraKey ?? '') ?? 0), 0), [filteredItems, jiraMaps]);
+
+  // Bubble up additions/deletions for KPI overrides
+  const filteredAdditions = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.additions ?? 0), 0), [filteredItems]);
+  const filteredDeletions = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.deletions ?? 0), 0), [filteredItems]);
+  React.useEffect(() => {
+    onFilteredTotalsChange?.({ additions: filteredAdditions, deletions: filteredDeletions });
+  }, [filteredAdditions, filteredDeletions, onFilteredTotalsChange]);
 
   const ticketOnly = React.useMemo(() => tickets.filter(t => !(t.linkedPRs ?? []).length && !!t.updatedBySelectedUserInWindow), [tickets]);
   const sortedTicketOnly = React.useMemo(() => {
@@ -210,6 +239,7 @@ export function PRLifecycleView({
         <table style={{ width: '100%', fontSize: 14, borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--panel-br)' }}>
+              <th style={{ ...thLeft }}></th>
               <th style={{ ...thLeft, cursor: 'pointer' }} onClick={() => toggleSort(setSortMain, sortMain, 'Jira Ticket')}>Jira Ticket<SortIndicator active={sortMain.col==='Jira Ticket'} dir={sortMain.dir} /></th>
               <th style={{ ...thLeft, cursor: 'pointer' }} onClick={() => toggleSort(setSortMain, sortMain, 'Parent')}>Parent<SortIndicator active={sortMain.col==='Parent'} dir={sortMain.dir} /></th>
               <th style={{ ...thLeft, cursor: 'pointer' }} onClick={() => toggleSort(setSortMain, sortMain, 'PR')}>PR<SortIndicator active={sortMain.col==='PR'} dir={sortMain.dir} /></th>
@@ -224,6 +254,14 @@ export function PRLifecycleView({
           <tbody>
             {sortedItems.map(i => (
               <tr key={i.id} style={{ borderBottom: '1px solid var(--panel-br)' }}>
+                <td style={tdStyle}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(i.id)}
+                    onChange={() => toggleSelected(i.id)}
+                    aria-label={`Include PR #${i.number}`}
+                  />
+                </td>
                 <td style={tdStyle}>
                   {i.jiraUrl ? (
                     <a href={i.jiraUrl} target="_blank" rel="noreferrer">
@@ -287,6 +325,7 @@ export function PRLifecycleView({
             {/* Total row (not part of sorting) */}
             <tr style={{ background: 'var(--panel-bg-alt, #1e293b)' }}>
               <td style={tdStyle}><strong>Total</strong></td>
+              <td style={tdStyle}>—</td>
               <td style={tdStyle}>—</td>
               <td style={tdStyle}>—</td>
               <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalLocChanged} /></strong></td>

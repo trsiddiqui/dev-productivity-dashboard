@@ -32,6 +32,9 @@ export default function Page(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Overrides from PR lifecycle selection filtering
+  const [filteredAdditions, setFilteredAdditions] = useState<number | undefined>(undefined);
+  const [filteredDeletions, setFilteredDeletions] = useState<number | undefined>(undefined);
 
 
   useEffect(() => {
@@ -239,13 +242,21 @@ export default function Page(): JSX.Element {
       {}
       {data && (
         <>
-          <KPIsView kpis={data.kpis} />
+          <KPIsView kpis={data.kpis} additionsOverride={filteredAdditions} deletionsOverride={filteredDeletions} />
           <div style={{ height: 12 }} />
           <LineByDay items={data.timeseries} />
           {data.lifecycle && (
             <>
               <div style={{ height: 12 }} />
-              <PRLifecycleView items={data.lifecycle.items} stats={data.lifecycle.stats} tickets={data.tickets} />
+              <PRLifecycleView
+                items={data.lifecycle.items}
+                stats={data.lifecycle.stats}
+                tickets={data.tickets}
+                onFilteredTotalsChange={({ additions, deletions }) => {
+                  setFilteredAdditions(additions);
+                  setFilteredDeletions(deletions);
+                }}
+              />
             </>
           )}
         </>
