@@ -645,21 +645,13 @@ export async function getJiraIssuesUpdated(params: {
     'customfield_10014', // Epic Link
   ];
 
-  const envProjects = (process.env.JIRA_PROJECTS ?? '').split(',').map(s => s.trim()).filter(Boolean);
-  const projectFilter = projectKey
-    ? `AND project = ${projectKey}`
-    : (envProjects.length ? `AND project in (${envProjects.join(',')})` : '');
-
   const assigneeExact = jiraAccountId ? `AND assignee in "${jiraAccountId}"` : '';
-
-  const issueTypes = ['Story', 'Task', 'Bug', 'Epic'];
-  const issueTypeFilter = issueTypes.length ? `AND issuetype in (${issueTypes.join(',')})` : '';
-
+  // Keep only essential filters: updated window, optional assignee, and optional project
+  const projectFilter = projectKey ? `AND project = ${projectKey}` : '';
   const jql = [
     `updated >= "${from}" AND updated <= "${to}"`,
-    projectFilter,
     assigneeExact,
-    issueTypeFilter,
+    projectFilter,
   ].filter(Boolean).join(' ');
 
   console.log(`[API CALL START] runJQL (issues-updated)`);
