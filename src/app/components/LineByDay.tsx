@@ -20,7 +20,7 @@ type Props = { items: TimeseriesItem[] };
 const palette = {
   additions: '#22c55e',     // green
   deletions: '#ef4444',     // red
-  prs: '#60a5fa',           // blue
+  prs: '#60a5fa',           // blue (unused in chart)
   // Removed storyPoints and tickets from chart per new requirement
   grid: '#334155',
   axis: '#94a3b8',
@@ -75,7 +75,7 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
       <div style={{ fontSize: 13, lineHeight: 1.5 }}>
         <div><span style={{ color: palette.additions }}>Additions</span> : {formatNum(map.get('Additions') ?? 0)}</div>
         <div><span style={{ color: palette.deletions }}>Deletions</span> : {formatNum(map.get('Deletions') ?? 0)}</div>
-        <div><span style={{ color: palette.prs }}>PRs</span> : {formatNum(map.get('PRs') ?? 0)}</div>
+        {/* PRs removed from chart */}
   {/* Story Points and Tickets removed from tooltip */}
       </div>
     </div>
@@ -111,7 +111,8 @@ export function LineByDay({ items }: Props): JSX.Element {
   const yMax = React.useMemo(() => {
     let max = 0;
     for (const it of items) {
-      max = Math.max(max, it.additions || 0, it.deletions || 0, it.prCount || 0);
+      // Exclude PR count since PR series is hidden
+      max = Math.max(max, it.additions || 0, it.deletions || 0);
     }
     return max > 0 ? Math.ceil(max * 1.05) : 1; // headroom so overlay covers full chart height
   }, [items]);
@@ -165,15 +166,7 @@ export function LineByDay({ items }: Props): JSX.Element {
               dot={false}
               activeDot={{ r: 4 }}
             />
-            <Line
-              type="monotone"
-              dataKey="prCount"
-              name="PRs"
-              stroke={palette.prs}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
+            {/* PR series removed */}
             {/* Removed Story Points and Tickets lines */}
           </LineChart>
         </ResponsiveContainer>
