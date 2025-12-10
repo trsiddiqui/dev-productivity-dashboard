@@ -140,6 +140,15 @@
     border-radius: 4px;
 }
 
+/* Advanced Job Search card layout */
+#advanced_search_wrapper {
+    max-width: 960px;          /* constrain width */
+    margin: 0 auto 64px;       /* center + bottom spacing */
+    padding: 32px 40px;        /* inner padding like the search bar card */
+    background-color: #F4F6FB; /* same light grey as search bar container */
+    box-sizing: border-box;
+}
+
 #advanced_search_wrapper .submission {
 	align-items: center;
 }
@@ -182,22 +191,28 @@
 }
 
 #job_listings_wrapper #notice {
-	display: grid;
-    grid-template-columns: 1fr 1fr;
-    background-color: #EAF4FC;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 24px;
+    background-color: #EAF4FC; /* light blue from Figma */
+    font-size: 12px;
+    margin: 0; /* ensures it sits snugly between search card and table */
 }
 
 #job_listings_wrapper #notice span {
-	order: 1;
-}
-
-#job_listings_wrapper #notice:after {
-	order: 2;
-    font-weight: unset;
+	margin: 0;
 }
 
 #job_listings_wrapper #notice a {
-	font-size: 12px;
+    font-size: 12px;
+    color: #007FE0;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+#job_listings_wrapper #notice a:hover {
+    text-decoration: underline;
 }
 
 /*Third page: Job details*/
@@ -412,6 +427,23 @@ input#resumator-address-value {
 
 #applicant .job_header p {
 	display: none;
+}
+
+#job_details_wrapper {
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+/* Job header hierarchy */
+#job_details_wrapper .job_header .heading {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+#job_details_wrapper .job_header .subheading {
+    font-size: 14px;
+    color: #73809A;
 }
 
 /**/
