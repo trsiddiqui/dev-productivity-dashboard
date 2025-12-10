@@ -15,6 +15,8 @@
 #search_bar {
     padding: 32px;
     margin-bottom: 4px;
+    background-color: #f5f5f5;
+    margin-bottom: 10px;
 }
 
 #jobs_table th {
