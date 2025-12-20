@@ -1,5 +1,6 @@
 import { cfg } from './config';
-import type { GithubUser, PR } from './types';
+import type { CommitTimeseriesItem, GithubUser, PR } from './types';
+import { eachDayOfInterval, formatISO } from 'date-fns';
 
 interface GHRepoOwner { login: string }
 interface GHRepo { name: string; owner: GHRepoOwner }
@@ -145,6 +146,63 @@ export async function getGithubPRsWithStats(params: {
   }
 
   return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getGithubCommitsByDay(params: {
+  login: string;
+  from: string;
+  to: string;
+}): Promise<CommitTimeseriesItem[]> {
+  const { login, from, to } = params;
+  if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
+
+  // GitHub commit search returns at most 1,000 results; bail out once we hit the cap
+  const SEARCH_LIMIT = 1000;
+  const PER_PAGE = 100;
+  const scope = buildScopeFilter();
+  const q = `author:${login} committer-date:${from}..${to} ${scope}`.trim();
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${cfg.githubToken}`,
+    Accept: 'application/vnd.github.cloak-preview',
+  };
+
+  const counts = new Map<string, number>();
+  let page = 1;
+  let fetched = 0;
+  while (true) {
+    const url = new URL('https://api.github.com/search/commits');
+    url.searchParams.set('q', q);
+    url.searchParams.set('sort', 'committer-date');
+    url.searchParams.set('order', 'asc');
+    url.searchParams.set('per_page', PER_PAGE.toString());
+    url.searchParams.set('page', page.toString());
+
+    const resp = await fetch(url.toString(), { headers });
+    const json = await resp.json();
+    if (!resp.ok) {
+      throw new Error(`GitHub commit search error: ${JSON.stringify(json)}`);
+    }
+
+    const items: Array<{ commit?: { author?: { date?: string } } }> = json.items ?? [];
+    for (const item of items) {
+      const date = (item.commit?.author?.date ?? '').slice(0, 10);
+      if (!date) continue;
+      counts.set(date, (counts.get(date) ?? 0) + 1);
+    }
+
+    fetched += items.length;
+    if (items.length < PER_PAGE || fetched >= SEARCH_LIMIT) break;
+    page += 1;
+  }
+
+  const days = eachDayOfInterval({ start: new Date(from), end: new Date(to) });
+  const series: CommitTimeseriesItem[] = days.map(d => {
+    const date = formatISO(d, { representation: 'date' });
+    return { date, commits: counts.get(date) ?? 0 };
+  });
+
+  return series;
 }
 
 function buildScopeFilter(): string {
