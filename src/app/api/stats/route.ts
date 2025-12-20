@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getGithubPRsWithStats } from '../../../lib/github';
+import { getGithubCommitsByDay, getGithubPRsWithStats } from '../../../lib/github';
 import { getJiraIssuesUpdated, getIssuePhaseTimes, getJiraIssuePRs } from '../../../lib/jira';
 import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
-import type { StatsResponse, KPIs, JiraIssue, PR, LinkedPR } from '../../../lib/types';
+import type { StatsResponse, KPIs, JiraIssue, PR, LinkedPR, CommitTimeseriesItem } from '../../../lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -26,6 +26,15 @@ export async function GET(req: Request) {
 
 
   const prs = await getGithubPRsWithStats({ login, from, to });
+
+    let commitTimeseries: CommitTimeseriesItem[] = [];
+    try {
+      commitTimeseries = await getGithubCommitsByDay({ login, from, to });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      warnings.push(`GitHub commits fetch skipped: ${msg}`);
+      commitTimeseries = [];
+    }
 
 
     let jiraIssues: JiraIssue[] = [];
@@ -129,6 +138,7 @@ export async function GET(req: Request) {
       from, to, login,
       kpis,
       timeseries,
+      commitTimeseries,
       prs: prsLinked,
       tickets: jiraIssues,
       warnings: warnings.length ? warnings : undefined,

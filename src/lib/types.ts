@@ -100,6 +100,11 @@ export interface TimeseriesItem {
   storyPoints: number;
 }
 
+export interface CommitTimeseriesItem {
+  date: string;
+  commits: number;
+}
+
 
 
 export interface PRLifecycle {
@@ -151,6 +156,7 @@ export interface StatsResponse {
   login: string;
   kpis: KPIs;
   timeseries: TimeseriesItem[];
+  commitTimeseries: CommitTimeseriesItem[];
   prs: PR[];
   tickets: JiraIssue[];
   warnings?: string[];
