@@ -26,13 +26,18 @@ interface TooltipProps {
 
 const palette = {
   commits: '#6366f1',
+  additions: '#22c55e',
+  deletions: '#ef4444',
   grid: '#334155',
   axis: '#94a3b8',
+  inactivity: 'rgba(148, 163, 184, 0.18)',
 };
 
 function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | null {
   if (!active || !payload || payload.length === 0) return null;
-  const commits = payload[0]?.value ?? 0;
+  const commits = payload.find(p => (p as { dataKey?: string }).dataKey === 'commits')?.value ?? 0;
+  const additions = payload.find(p => (p as { dataKey?: string }).dataKey === 'additions')?.value ?? 0;
+  const deletions = payload.find(p => (p as { dataKey?: string }).dataKey === 'deletions')?.value ?? 0;
 
   // Derive local weekday name from YYYY-MM-DD label
   let weekday = '';
@@ -59,6 +64,8 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
     >
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{displayLabel}</div>
       <div style={{ fontSize: 13 }}>Commits: {commits}</div>
+      <div style={{ fontSize: 13 }}>Lines added: {additions}</div>
+      <div style={{ fontSize: 13 }}>Lines deleted: {deletions}</div>
     </div>
   );
 }
@@ -89,8 +96,28 @@ export function CommitsByDay({ items }: Props): JSX.Element {
   }, [items, parseLocalYMD]);
 
   const yMax = useMemo(() => {
-    const max = items.reduce((acc, it) => Math.max(acc, it.commits || 0), 0);
+    const max = items.reduce((acc, it) => Math.max(acc, it.commits || 0, it.additions || 0, it.deletions || 0), 0);
     return max > 0 ? Math.ceil(max * 1.1) : 1;
+  }, [items]);
+
+  const inactivityBands = useMemo(() => {
+    const bands: Array<{ from: string; to: string }> = [];
+    let start: string | null = null;
+
+    items.forEach((item, idx) => {
+      const isIdle = (item.commits ?? 0) === 0 && (item.additions ?? 0) === 0 && (item.deletions ?? 0) === 0;
+      if (isIdle && !start) start = item.date;
+      if (!isIdle && start) {
+        bands.push({ from: start, to: item.date });
+        start = null;
+      }
+      const isLast = idx === items.length - 1;
+      if (isLast && start) {
+        bands.push({ from: start, to: item.date });
+      }
+    });
+
+    return bands;
   }, [items]);
 
   return (
@@ -99,6 +126,19 @@ export function CommitsByDay({ items }: Props): JSX.Element {
       <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+            {inactivityBands.map((b, idx) => (
+              <ReferenceArea
+                key={`idle-${idx}-${b.from}`}
+                x1={b.from}
+                x2={b.to}
+                y1={0}
+                y2={yMax}
+                ifOverflow="hidden"
+                fill={palette.inactivity}
+                stroke="rgba(148, 163, 184, 0.45)"
+                strokeOpacity={0.55}
+              />
+            ))}
             {weekendBands.map((b) => (
               <ReferenceArea
                 key={b.from}
@@ -117,6 +157,8 @@ export function CommitsByDay({ items }: Props): JSX.Element {
             <YAxis stroke={palette.axis} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="commits" name="Commits" fill={palette.commits} />
+            <Bar dataKey="additions" name="Lines added" fill={palette.additions} />
+            <Bar dataKey="deletions" name="Lines deleted" fill={palette.deletions} />
           </BarChart>
         </ResponsiveContainer>
       </div>
