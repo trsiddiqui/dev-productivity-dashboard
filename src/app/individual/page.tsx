@@ -14,6 +14,7 @@ import { KPIsView } from '../components/KPIs';
 import { LineByDay } from '../components/LineByDay';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { PRLifecycleView } from '../components/PRLifeCycle';
+import { CommitsByDay } from '../components/CommitsByDay';
 
 export default function Page(): JSX.Element {
 
@@ -243,6 +244,8 @@ export default function Page(): JSX.Element {
       {data && (
         <>
           <KPIsView kpis={data.kpis} additionsOverride={filteredAdditions} deletionsOverride={filteredDeletions} />
+          <div style={{ height: 12 }} />
+          <CommitsByDay items={data.commitTimeseries} />
           <div style={{ height: 12 }} />
           <LineByDay items={data.timeseries} />
           {data.lifecycle && (

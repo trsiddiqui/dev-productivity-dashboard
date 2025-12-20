@@ -1,0 +1,125 @@
+'use client';
+
+import { useCallback, useMemo } from 'react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceArea,
+} from 'recharts';
+import type { CommitTimeseriesItem } from '../../lib/types';
+import { JSX } from 'react';
+
+interface Props {
+  items: CommitTimeseriesItem[];
+}
+
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{ value?: number }>;
+  label?: string;
+}
+
+const palette = {
+  commits: '#6366f1',
+  grid: '#334155',
+  axis: '#94a3b8',
+};
+
+function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | null {
+  if (!active || !payload || payload.length === 0) return null;
+  const commits = payload[0]?.value ?? 0;
+
+  // Derive local weekday name from YYYY-MM-DD label
+  let weekday = '';
+  if (typeof label === 'string') {
+    const parts = label.split('-').map(Number);
+    if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
+      const [y, m, d] = parts;
+      const dt = new Date(y, (m || 1) - 1, d || 1);
+      weekday = dt.toLocaleDateString(undefined, { weekday: 'short' });
+    }
+  }
+  const displayLabel = weekday ? `${weekday}, ${label}` : label;
+
+  return (
+    <div
+      style={{
+        background: 'var(--tooltip-bg)',
+        color: 'var(--tooltip-fg)',
+        border: '1px solid var(--panel-br)',
+        borderRadius: 8,
+        padding: '10px 12px',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>{displayLabel}</div>
+      <div style={{ fontSize: 13 }}>Commits: {commits}</div>
+    </div>
+  );
+}
+
+export function CommitsByDay({ items }: Props): JSX.Element {
+  const parseLocalYMD = useCallback((s: string): Date => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1);
+  }, []);
+
+  const weekendBands = useMemo(() => {
+    const bands: Array<{ from: string; to: string }> = [];
+    for (let i = 0; i < items.length; i++) {
+      const d = parseLocalYMD(items[i].date);
+      const dow = d.getDay();
+      if (dow === 6) {
+        const from = items[i].date;
+        const to = items[i + 1]?.date ?? from;
+        bands.push({ from, to });
+      }
+      if (dow === 0) {
+        const from = items[i].date;
+        const to = items[i + 1]?.date ?? from;
+        bands.push({ from, to });
+      }
+    }
+    return bands;
+  }, [items, parseLocalYMD]);
+
+  const yMax = useMemo(() => {
+    const max = items.reduce((acc, it) => Math.max(acc, it.commits || 0), 0);
+    return max > 0 ? Math.ceil(max * 1.1) : 1;
+  }, [items]);
+
+  return (
+    <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+      <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Commits by Day</h2>
+      <div style={{ width: '100%', height: 260 }}>
+        <ResponsiveContainer>
+          <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+            {weekendBands.map((b) => (
+              <ReferenceArea
+                key={b.from}
+                x1={b.from}
+                x2={b.to}
+                y1={0}
+                y2={yMax}
+                ifOverflow="hidden"
+                fill="rgba(120,120,120,0.20)"
+                stroke="rgba(120,120,120,0.35)"
+                strokeOpacity={0.7}
+              />
+            ))}
+            <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" />
+            <XAxis dataKey="date" stroke={palette.axis} tickMargin={8} />
+            <YAxis stroke={palette.axis} allowDecimals={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="commits" name="Commits" fill={palette.commits} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
