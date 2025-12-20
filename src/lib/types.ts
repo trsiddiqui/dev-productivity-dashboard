@@ -103,6 +103,8 @@ export interface TimeseriesItem {
 export interface CommitTimeseriesItem {
   date: string;
   commits: number;
+  additions: number;
+  deletions: number;
 }
 
 
