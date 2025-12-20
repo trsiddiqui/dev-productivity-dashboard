@@ -167,7 +167,9 @@ export async function getGithubCommitsByDay(params: {
     Accept: 'application/vnd.github.cloak-preview',
   };
 
-  const counts = new Map<string, number>();
+  const commitCounts = new Map<string, number>();
+  const additionCounts = new Map<string, number>();
+  const deletionCounts = new Map<string, number>();
   let page = 1;
   let fetched = 0;
   while (true) {
@@ -184,11 +186,28 @@ export async function getGithubCommitsByDay(params: {
       throw new Error(`GitHub commit search error: ${JSON.stringify(json)}`);
     }
 
-    const items: Array<{ commit?: { author?: { date?: string } } }> = json.items ?? [];
+    const items: Array<{ commit?: { author?: { date?: string } }; url?: string }> = json.items ?? [];
     for (const item of items) {
       const date = (item.commit?.author?.date ?? '').slice(0, 10);
       if (!date) continue;
-      counts.set(date, (counts.get(date) ?? 0) + 1);
+      commitCounts.set(date, (commitCounts.get(date) ?? 0) + 1);
+
+      const commitUrl = item.url;
+      if (commitUrl) {
+        try {
+          const detailResp = await fetch(commitUrl, { headers });
+          const detail = await detailResp.json() as { stats?: { additions?: number; deletions?: number } };
+          if (detailResp.ok) {
+            const adds = Number(detail.stats?.additions ?? 0);
+            const dels = Number(detail.stats?.deletions ?? 0);
+            additionCounts.set(date, (additionCounts.get(date) ?? 0) + adds);
+            deletionCounts.set(date, (deletionCounts.get(date) ?? 0) + dels);
+          }
+        } catch (err) {
+          // Swallow per-commit errors to avoid failing the entire stats fetch
+          console.warn('Skipping commit stats fetch', err);
+        }
+      }
     }
 
     fetched += items.length;
@@ -199,7 +218,12 @@ export async function getGithubCommitsByDay(params: {
   const days = eachDayOfInterval({ start: new Date(from), end: new Date(to) });
   const series: CommitTimeseriesItem[] = days.map(d => {
     const date = formatISO(d, { representation: 'date' });
-    return { date, commits: counts.get(date) ?? 0 };
+    return {
+      date,
+      commits: commitCounts.get(date) ?? 0,
+      additions: additionCounts.get(date) ?? 0,
+      deletions: deletionCounts.get(date) ?? 0,
+    };
   });
 
   return series;
