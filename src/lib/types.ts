@@ -20,6 +20,12 @@ export interface PR {
   deletions: number;
   changedFiles?: number;
   commitCount?: number;
+  firstCommitAt?: string | null;
+  lastCommitAt?: string | null;
+  reviewCount?: number;
+  approvalCount?: number;
+  changesRequestedCount?: number;
+  commentReviewCount?: number;
   repository: { owner: string; name: string };
 
 
@@ -127,6 +133,37 @@ export interface ContributionRepoItem {
   locChanged: number;
 }
 
+export interface ContributionWipItem {
+  date: string;
+  openPRs: number;
+  activeIssues: number;
+}
+
+export interface ContributionReviewSummary {
+  totalReviews: number;
+  approvals: number;
+  changesRequested: number;
+  comments: number;
+  reviewedPRs: number;
+  reviewCoveragePct: number;
+  avgReviewsPerPR: number;
+}
+
+export interface ContributionPRCycleSummary {
+  sampleSize: number;
+  medianFirstCommitToMergeHours: number | null;
+  medianCodingHours: number | null;
+  medianLastCommitToReviewHours: number | null;
+  medianReviewToMergeHours: number | null;
+}
+
+export interface ContributionIssueCycleSummary {
+  sampleSize: number;
+  completedCount: number;
+  medianCycleTimeHours: number | null;
+  avgCycleTimeHours: number | null;
+}
+
 export interface ContributionKpis {
   totalPRs: number;
   totalAdditions: number;
@@ -154,6 +191,11 @@ export interface ContributionResponse {
   daily: ContributionDailyItem[];
   repos: ContributionRepoItem[];
   prs: PR[];
+  issues: JiraIssue[];
+  reviews: ContributionReviewSummary;
+  prCycle: ContributionPRCycleSummary;
+  issueCycle: ContributionIssueCycleSummary;
+  wip: ContributionWipItem[];
   warnings?: string[];
 }
 

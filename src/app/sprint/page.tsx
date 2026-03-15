@@ -9,6 +9,7 @@ import type {
 } from "@/lib/types";
 import type { PieLabelRenderProps } from "recharts/types/polar/Pie";
 import { SearchableSelect, type Option } from "../components/SearchableSelect";
+import { DateAxisTick, weekdayFromYmd } from "../components/ChartDateTick";
 import {
   LineChart,
   Line,
@@ -127,10 +128,10 @@ function hexToRgb(hex: string): string {
 }
 
 
-function centralParts(iso?: string): { date: string; timeTz: string } {
-  if (!iso) return { date: "—", timeTz: "" };
+function centralParts(iso?: string): { date: string; timeTz: string; weekday: string } {
+  if (!iso) return { date: "—", timeTz: "", weekday: "" };
   const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return { date: "—", timeTz: "" };
+  if (!Number.isFinite(d.getTime())) return { date: "—", timeTz: "", weekday: "" };
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Chicago",
     year: "numeric",
@@ -148,7 +149,11 @@ function centralParts(iso?: string): { date: string; timeTz: string } {
   const hh = get("hour");
   const mi = get("minute");
   const tz = get("timeZoneName") || "CT";
-  return { date: `${yyyy}-${mm}-${dd}`, timeTz: `${hh}:${mi} ${tz}` };
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    weekday: "short",
+  }).format(d);
+  return { date: `${yyyy}-${mm}-${dd}`, timeTz: `${hh}:${mi} ${tz}`, weekday };
 }
 
 
@@ -698,11 +703,11 @@ export default function SprintPage(): JSX.Element {
               <h2 style={{ fontWeight: 700, marginBottom: 8 }}>Sprint Burn</h2>
               <div style={{ width: "100%", height: 340 }}>
                 <ResponsiveContainer>
-                  <LineChart data={data.burn} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                  <LineChart data={data.burn} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
                     <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="date" stroke={t.muted} tickMargin={8} />
+                    <XAxis dataKey="date" stroke={t.muted} tickMargin={12} height={42} tick={<DateAxisTick color={t.muted} />} />
                     <YAxis stroke={t.muted} allowDecimals={false} />
-                    <Tooltip />
+                    <Tooltip content={<BurnTooltip />} />
                     <Legend />
                     <Line type="monotone" dataKey="devRemaining" name="Dev Remaining" stroke="#60a5fa" dot={false} strokeWidth={2} />
                     <Line
@@ -1068,7 +1073,7 @@ function Step({
           <div style={{ fontSize: 14, marginTop: 6, color, textAlign: "center" }}>{icon}</div>
           <div style={{ fontSize: 10, color: t.muted, textAlign: "center", lineHeight: 1.15, marginTop: 2 }}>
             <div>{parts.date}</div>
-            <div>{parts.timeTz}</div>
+            <div>{parts.weekday}{parts.timeTz ? ` - ${parts.timeTz}` : ""}</div>
           </div>
         </>
       ) : (
@@ -1076,10 +1081,42 @@ function Step({
           <div style={{ fontSize: 11, marginTop: 6, color, textAlign: "right" }}>{label}</div>
           <div style={{ fontSize: 11, color: t.muted, textAlign: "right", lineHeight: 1.15 }}>
             <div>{parts.date}</div>
-            <div>{parts.timeTz}</div>
+            <div>{parts.weekday}{parts.timeTz ? ` - ${parts.timeTz}` : ""}</div>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+type BurnTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; color?: string }>;
+  label?: string;
+};
+
+function BurnTooltip({ active, payload, label }: BurnTooltipProps): JSX.Element | null {
+  if (!active || !payload?.length) return null;
+  const weekday = typeof label === "string" ? weekdayFromYmd(label) ?? "" : "";
+
+  return (
+    <div
+      style={{
+        background: "var(--tooltip-bg)",
+        color: "var(--tooltip-fg)",
+        border: "1px solid var(--panel-br)",
+        borderRadius: 8,
+        padding: "10px 12px",
+        boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+      }}
+    >
+      <div style={{ fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 12, color: t.muted, marginBottom: 6 }}>{weekday || "-"}</div>
+      {payload.map((item) => (
+        <div key={item.name} style={{ fontSize: 13 }}>
+          <span style={{ color: item.color ?? t.appFg }}>{item.name}</span>: {Number(item.value ?? 0).toLocaleString()}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1299,10 +1336,10 @@ function QATicketRow({ issue, qa }: { issue: JiraIssue; qa: { id?: string; name:
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <Pill bg={`rgba(${hexToRgb(palette.review)}, 0.10)`} br={`rgba(${hexToRgb(palette.review)}, 0.35)`}>
-            Review: <span style={{ marginLeft: 6, fontWeight: 700 }}>{review.date}</span>
+            Review: <span style={{ marginLeft: 6, fontWeight: 700 }}>{review.date}{review.weekday ? ` - ${review.weekday}` : ""}</span>
           </Pill>
           <Pill bg={`rgba(${hexToRgb(palette.done)}, 0.10)`} br={`rgba(${hexToRgb(palette.done)}, 0.35)`}>
-            Approved: <span style={{ marginLeft: 6, fontWeight: 700 }}>{approved.date}</span>
+            Approved: <span style={{ marginLeft: 6, fontWeight: 700 }}>{approved.date}{approved.weekday ? ` - ${approved.weekday}` : ""}</span>
           </Pill>
           <Pill bg={`rgba(${hexToRgb(palette.review)}, 0.14)`} br={`rgba(${hexToRgb(palette.review)}, 0.35)`}>
             Actual (QA): <span style={{ marginLeft: 6, fontWeight: 700 }}><Hrs v={durCalc} /></span>

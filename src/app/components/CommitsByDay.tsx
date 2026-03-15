@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import type { CommitTimeseriesItem } from '../../lib/types';
 import { JSX } from 'react';
+import { DateAxisTick, weekdayFromYmd } from './ChartDateTick';
 
 interface Props {
   items: CommitTimeseriesItem[];
@@ -39,18 +40,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
   const additions = payload.find(p => (p as { dataKey?: string }).dataKey === 'additions')?.value ?? 0;
   const deletions = payload.find(p => (p as { dataKey?: string }).dataKey === 'deletions')?.value ?? 0;
 
-  // Derive local weekday name from YYYY-MM-DD label
-  let weekday = '';
-  if (typeof label === 'string') {
-    const parts = label.split('-').map(Number);
-    if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
-      const [y, m, d] = parts;
-      const dt = new Date(y, (m || 1) - 1, d || 1);
-      weekday = dt.toLocaleDateString(undefined, { weekday: 'short' });
-    }
-  }
-  const displayLabel = weekday ? `${weekday}, ${label}` : label;
-
+  const weekday = typeof label === 'string' ? weekdayFromYmd(label) ?? '' : '';
   return (
     <div
       style={{
@@ -62,7 +52,8 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
         boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
       }}
     >
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>{displayLabel}</div>
+      <div style={{ fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{weekday || '-'}</div>
       <div style={{ fontSize: 13 }}>PRs merged to dev: {prsMerged}</div>
       <div style={{ fontSize: 13 }}>Lines added: {additions}</div>
       <div style={{ fontSize: 13 }}>Lines deleted: {deletions}</div>
@@ -125,7 +116,7 @@ export function CommitsByDay({ items }: Props): JSX.Element {
       <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Merged to Dev by Day</h2>
       <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
-          <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+          <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
             {inactivityBands.map((b, idx) => (
               <ReferenceArea
                 key={`idle-${idx}-${b.from}`}
@@ -153,7 +144,7 @@ export function CommitsByDay({ items }: Props): JSX.Element {
               />
             ))}
             <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke={palette.axis} tickMargin={8} />
+            <XAxis dataKey="date" stroke={palette.axis} tickMargin={12} height={42} tick={<DateAxisTick color={palette.axis} />} />
             <YAxis stroke={palette.axis} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="commits" name="PRs merged" fill={palette.commits} />

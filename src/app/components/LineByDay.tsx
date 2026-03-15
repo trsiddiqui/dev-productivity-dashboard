@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import type { TimeseriesItem } from '../../lib/types';
 import { JSX } from 'react';
+import { DateAxisTick, weekdayFromYmd } from './ChartDateTick';
 
 type Props = { items: TimeseriesItem[] };
 
@@ -48,18 +49,7 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
     if (typeof p.value === 'number') map.set(p.name, p.value);
   });
 
-  // Derive local weekday name from YYYY-MM-DD label (fallback to label if parsing fails)
-  let weekday = '';
-  if (typeof label === 'string') {
-    const parts = label.split('-').map(Number);
-    if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
-      const [y, m, d] = parts;
-      const dt = new Date(y, (m || 1) - 1, d || 1);
-      weekday = dt.toLocaleDateString(undefined, { weekday: 'short' }); // e.g. Mon
-    }
-  }
-  const displayLabel = weekday ? `${weekday}, ${label}` : label;
-
+  const weekday = typeof label === 'string' ? weekdayFromYmd(label) ?? '' : '';
   return (
     <div
       style={{
@@ -71,7 +61,8 @@ const CustomTooltip = ({ active, payload, label }: TProps): JSX.Element | null =
         boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
       }}
     >
-  <div style={{ fontWeight: 600, marginBottom: 6 }}>{displayLabel}</div>
+  <div style={{ fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{weekday || '-'}</div>
       <div style={{ fontSize: 13, lineHeight: 1.5 }}>
         <div><span style={{ color: palette.additions }}>Additions</span> : {formatNum(map.get('Additions') ?? 0)}</div>
         <div><span style={{ color: palette.deletions }}>Deletions</span> : {formatNum(map.get('Deletions') ?? 0)}</div>
@@ -121,7 +112,7 @@ export function LineByDay({ items }: Props): JSX.Element {
       <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Daily Activity</h2>
       <div style={{ width: '100%', height: 320 }}>
         <ResponsiveContainer>
-          <LineChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+          <LineChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
             {/* Weekend shading (stronger contrast, theme-independent color) */}
             {weekendBands.map((b) => (
               <ReferenceArea
@@ -137,7 +128,7 @@ export function LineByDay({ items }: Props): JSX.Element {
               />
             ))}
             <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke={palette.axis} tickMargin={8} />
+            <XAxis dataKey="date" stroke={palette.axis} tickMargin={12} height={42} tick={<DateAxisTick color={palette.axis} />} />
             <YAxis stroke={palette.axis} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />
             <Legend

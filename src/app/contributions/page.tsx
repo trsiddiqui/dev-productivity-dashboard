@@ -122,6 +122,12 @@ export default function ContributionsPage(): JSX.Element {
       { metric: 'LOC changed', primary: primaryData.kpis.totalLocChanged, secondary: secondaryData.kpis.totalLocChanged },
       { metric: 'Active days', primary: primaryData.kpis.activeDays, secondary: secondaryData.kpis.activeDays },
       { metric: 'Active day %', primary: primaryData.kpis.activeDayRate, secondary: secondaryData.kpis.activeDayRate },
+      { metric: 'Review coverage %', primary: primaryData.reviews.reviewCoveragePct, secondary: secondaryData.reviews.reviewCoveragePct },
+      {
+        metric: 'Issue cycle (h)',
+        primary: primaryData.issueCycle.medianCycleTimeHours ?? 0,
+        secondary: secondaryData.issueCycle.medianCycleTimeHours ?? 0,
+      },
       { metric: 'LOC / day', primary: primaryData.kpis.avgLocPerActiveDay, secondary: secondaryData.kpis.avgLocPerActiveDay },
       { metric: 'Idle gap (d)', primary: primaryData.kpis.longestIdleGapDays, secondary: secondaryData.kpis.longestIdleGapDays },
     ];
@@ -251,7 +257,7 @@ export default function ContributionsPage(): JSX.Element {
           <div style={{ marginBottom: 16 }}>
             <ContributionSignalsChart
               title="Head-to-Head Contribution Signals"
-              subtitle="Higher is usually better except for idle gap days. When idle gaps are large and active-day rate is low, output is usually thin or blocked."
+              subtitle="Higher is usually better except for issue cycle hours and idle gap days. When those two climb while active-day rate is low, output is usually thin or blocked."
               primaryLabel={primaryData.login}
               secondaryLabel={secondaryData.login}
               items={comparisonSignals}
