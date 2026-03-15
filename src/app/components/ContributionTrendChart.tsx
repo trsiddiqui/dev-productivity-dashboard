@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import type { ContributionDailyItem } from '@/lib/types';
 import { JSX } from 'react';
+import { DateAxisTick, weekdayFromYmd } from './ChartDateTick';
 
 interface Props {
   items: ContributionDailyItem[];
@@ -51,6 +52,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
   const row = payload[0]?.payload;
   const additions = row?.additions ?? 0;
   const deletions = row?.deletions ?? 0;
+  const weekday = weekdayFromYmd(typeof label === 'string' ? label : undefined);
 
   return (
     <div style={{
@@ -61,7 +63,8 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
       padding: '10px 12px',
       boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
     }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{weekday ?? '-'}</div>
       <div style={{ fontSize: 13 }}>Dev PRs: {prCount}</div>
       <div style={{ fontSize: 13 }}>LOC changed: {Number(locChanged).toLocaleString()}</div>
       <div style={{ fontSize: 13 }}>Additions: {Number(additions).toLocaleString()}</div>
@@ -100,7 +103,7 @@ export function ContributionTrendChart({ items, title, subtitle }: Props): JSX.E
       </div>
       <div style={{ width: '100%', height: 300 }}>
         <ResponsiveContainer>
-          <ComposedChart data={items} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+          <ComposedChart data={items} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}>
             {weekendBands.map((band, index) => (
               <ReferenceArea
                 key={`${band.from}-${index}`}
@@ -115,7 +118,7 @@ export function ContributionTrendChart({ items, title, subtitle }: Props): JSX.E
               />
             ))}
             <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke={palette.axis} tickMargin={8} />
+            <XAxis dataKey="date" stroke={palette.axis} tickMargin={12} height={42} tick={<DateAxisTick color={palette.axis} />} />
             <YAxis yAxisId="loc" stroke={palette.axis} allowDecimals={false} />
             <YAxis yAxisId="prs" orientation="right" stroke={palette.axis} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />

@@ -19,9 +19,9 @@ function Num({ v }: { v?: number | null }): JSX.Element {
 
 
 function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
-  if (!iso) return <span>—</span>;
+  if (!iso) return <span>-</span>;
   const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return <span>—</span>;
+  if (!Number.isFinite(d.getTime())) return <span>-</span>;
 
   const date = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
@@ -36,10 +36,14 @@ function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
     timeZoneName: 'short',
   }).format(d);
 
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+  }).format(d);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, textAlign: 'right', whiteSpace: 'nowrap' }}>
       <span>{date}</span>
-      <span style={{ fontSize: 12, color: '#94a3b8' }}>{time}</span>
+      <span style={{ fontSize: 12, color: '#94a3b8' }}>{weekday} - {time}</span>
     </div>
   );
 }

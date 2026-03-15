@@ -2,12 +2,18 @@ import { eachDayOfInterval, formatISO } from 'date-fns';
 import type {
   CommitTimeseriesItem,
   ContributionDailyItem,
+  ContributionIssueCycleSummary,
   ContributionKpis,
+  ContributionPRCycleSummary,
   ContributionRepoItem,
+  ContributionReviewSummary,
+  ContributionWipItem,
+  JiraIssue,
   PR,
 } from './types';
 
 type ContributionDateMode = 'created' | 'merged';
+const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 
 function eventDateForPR(pr: PR, dateMode: ContributionDateMode): string | null {
   const iso = dateMode === 'merged' ? pr.mergedAt : pr.createdAt;
@@ -30,6 +36,28 @@ function average(nums: number[]): number | null {
 
 function round(value: number): number {
   return Number(value.toFixed(1));
+}
+
+function diffHours(start?: string | null, end?: string | null): number | null {
+  if (!start || !end) return null;
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  return Math.max(0, (endMs - startMs) / 36e5);
+}
+
+export function extractJiraKeysFromPRs(prs: PR[]): string[] {
+  const found = new Set<string>();
+
+  for (const pr of prs) {
+    const texts = [pr.title, pr.headRefName].filter(Boolean) as string[];
+    for (const text of texts) {
+      const matches = text.toUpperCase().match(JIRA_KEY_RE) ?? [];
+      for (const match of matches) found.add(match);
+    }
+  }
+
+  return Array.from(found).sort((left, right) => left.localeCompare(right));
 }
 
 export function aggregateContributionDaily(params: {
@@ -162,4 +190,94 @@ export function computeContributionKpis(params: {
     burstiestDayShare: round(burstiestDayShare),
     avgDaysBetweenPRs: average(gaps) === null ? null : round(average(gaps)!),
   };
+}
+
+export function computeContributionReviewSummary(prs: PR[]): ContributionReviewSummary {
+  const totalReviews = prs.reduce((sum, pr) => sum + (pr.reviewCount ?? 0), 0);
+  const approvals = prs.reduce((sum, pr) => sum + (pr.approvalCount ?? 0), 0);
+  const changesRequested = prs.reduce((sum, pr) => sum + (pr.changesRequestedCount ?? 0), 0);
+  const comments = prs.reduce((sum, pr) => sum + (pr.commentReviewCount ?? 0), 0);
+  const reviewedPRs = prs.filter((pr) => (pr.reviewCount ?? 0) > 0).length;
+  const reviewCoveragePct = prs.length > 0 ? (reviewedPRs / prs.length) * 100 : 0;
+
+  return {
+    totalReviews,
+    approvals,
+    changesRequested,
+    comments,
+    reviewedPRs,
+    reviewCoveragePct: round(reviewCoveragePct),
+    avgReviewsPerPR: prs.length > 0 ? round(totalReviews / prs.length) : 0,
+  };
+}
+
+export function computeContributionPRCycleSummary(prs: PR[]): ContributionPRCycleSummary {
+  const exactCycle = prs
+    .map((pr) => diffHours(pr.firstCommitAt, pr.mergedAt))
+    .filter((value): value is number => value !== null);
+  const coding = prs
+    .map((pr) => diffHours(pr.firstCommitAt, pr.lastCommitAt))
+    .filter((value): value is number => value !== null);
+  const lastCommitToReview = prs
+    .map((pr) => diffHours(pr.lastCommitAt, pr.firstReviewAt))
+    .filter((value): value is number => value !== null);
+  const reviewToMerge = prs
+    .map((pr) => diffHours(pr.firstReviewAt ?? pr.lastCommitAt, pr.mergedAt))
+    .filter((value): value is number => value !== null);
+
+  return {
+    sampleSize: exactCycle.length,
+    medianFirstCommitToMergeHours: exactCycle.length > 0 ? round(median(exactCycle)) : null,
+    medianCodingHours: coding.length > 0 ? round(median(coding)) : null,
+    medianLastCommitToReviewHours: lastCommitToReview.length > 0 ? round(median(lastCommitToReview)) : null,
+    medianReviewToMergeHours: reviewToMerge.length > 0 ? round(median(reviewToMerge)) : null,
+  };
+}
+
+export function computeContributionIssueCycleSummary(issues: JiraIssue[]): ContributionIssueCycleSummary {
+  const completed = issues
+    .map((issue) => diffHours(issue.inProgressAt, issue.completeAt))
+    .filter((value): value is number => value !== null);
+
+  return {
+    sampleSize: issues.length,
+    completedCount: completed.length,
+    medianCycleTimeHours: completed.length > 0 ? round(median(completed)) : null,
+    avgCycleTimeHours: average(completed) === null ? null : round(average(completed)!),
+  };
+}
+
+export function aggregateContributionWip(params: {
+  from: string;
+  to: string;
+  prs: PR[];
+  issues?: JiraIssue[];
+}): ContributionWipItem[] {
+  const { from, to, prs, issues = [] } = params;
+  const days = eachDayOfInterval({ start: new Date(from), end: new Date(to) });
+
+  return days.map((day) => {
+    const key = formatISO(day, { representation: 'date' });
+    const openPRs = prs.reduce((count, pr) => {
+      const start = pr.createdAt?.slice(0, 10);
+      const end = (pr.mergedAt ?? pr.closedAt ?? undefined)?.slice(0, 10);
+      if (!start || start > key) return count;
+      if (end && end <= key) return count;
+      return count + 1;
+    }, 0);
+
+    const activeIssues = issues.reduce((count, issue) => {
+      const start = issue.inProgressAt?.slice(0, 10);
+      const end = (issue.completeAt ?? issue.resolutiondate ?? undefined)?.slice(0, 10);
+      if (!start || start > key) return count;
+      if (end && end <= key) return count;
+      return count + 1;
+    }, 0);
+
+    return {
+      date: key,
+      openPRs,
+      activeIssues,
+    };
+  });
 }

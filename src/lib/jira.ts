@@ -598,6 +598,61 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
   return result;
 }
 
+export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssue[]> {
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken || issueKeys.length === 0) return [];
+
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+  const fields: string[] = [
+    'summary',
+    'assignee',
+    'status',
+    'updated',
+    'created',
+    'resolutiondate',
+    'issuetype',
+    'parent',
+    'customfield_10014',
+    cfg.jiraStoryPointsField,
+  ];
+
+  const uniqueKeys = Array.from(new Set(issueKeys.map((key) => key.trim()).filter(Boolean)));
+  const chunks: string[][] = [];
+  for (let index = 0; index < uniqueKeys.length; index += 50) {
+    chunks.push(uniqueKeys.slice(index, index + 50));
+  }
+
+  const byId = new Map<string, JiraIssue>();
+  for (const chunk of chunks) {
+    const jql = `key in (${chunk.map((key) => `"${key}"`).join(',')})`;
+    const raw = await runJQL({ jql, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+
+    for (const issue of raw) {
+      const spUnknown = issue.fields[cfg.jiraStoryPointsField];
+      const storyPoints = typeof spUnknown === 'number' ? spUnknown : undefined;
+      const assigneeField = issue.fields.assignee;
+
+      byId.set(issue.id, {
+        id: issue.id,
+        key: issue.key,
+        summary: issue.fields.summary,
+        assignee: assigneeField?.displayName,
+        status: issue.fields.status?.name ?? undefined,
+        storyPoints,
+        url: `${base}/browse/${issue.key}`,
+        updated: issue.fields.updated,
+        created: issue.fields.created,
+        resolutiondate: issue.fields.resolutiondate,
+        issueType: ((issue.fields as Record<string, unknown>).issuetype as { name?: string } | undefined)?.name,
+        parentKey: ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key,
+        epicKey: (issue.fields as Record<string, unknown>).customfield_10014 as (string | undefined),
+      });
+    }
+  }
+
+  return Array.from(byId.values()).sort((left, right) => left.key.localeCompare(right.key));
+}
+
 export async function getJiraSubtaskIds(parentKeys: string[]): Promise<Record<string, string[]>> {
   if (parentKeys.length === 0) return {};
   const base = normalizedBase();

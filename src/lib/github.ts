@@ -9,6 +9,9 @@ type GithubPRDateField = 'created' | 'merged';
 interface GHRepoOwner { login: string }
 interface GHRepo { name: string; owner: GHRepoOwner }
 interface GHReviewNode { submittedAt: string | null; state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING' }
+interface GHCommitNode { commit?: { authoredDate?: string | null; committedDate?: string | null } | null }
+interface GHCommitConnection { totalCount: number; nodes: GHCommitNode[] }
+interface GHReviewConnection { totalCount: number; nodes: GHReviewNode[] }
 interface GHReadyEvent { __typename: 'ReadyForReviewEvent'; createdAt: string }
 interface GHTimeline {
   nodes: Array<GHReadyEvent>;
@@ -28,9 +31,10 @@ interface GHPullRequestNode {
   additions: number;
   deletions: number;
   changedFiles: number;
-  commits: { totalCount: number };
+  firstCommits: GHCommitConnection;
+  lastCommits: { nodes: GHCommitNode[] };
   repository: GHRepo;
-  reviews: { nodes: GHReviewNode[] };
+  reviews: GHReviewConnection;
   timelineItems: GHTimeline;
 }
 interface GHSearchEdge { node: GHPullRequestNode }
@@ -89,12 +93,27 @@ export async function getGithubPRsWithStats(params: {
               additions
               deletions
               changedFiles
-              commits(first: 1) {
+              firstCommits: commits(first: 1) {
                 totalCount
+                nodes {
+                  commit {
+                    authoredDate
+                    committedDate
+                  }
+                }
+              }
+              lastCommits: commits(last: 1) {
+                nodes {
+                  commit {
+                    authoredDate
+                    committedDate
+                  }
+                }
               }
               repository { name owner { login } }
 
-              reviews(first: 50) {
+              reviews(first: 100) {
+                totalCount
                 nodes { submittedAt state }
               }
 
@@ -137,12 +156,22 @@ export async function getGithubPRsWithStats(params: {
       if (!isMatchingBaseBranch(n.baseRefName, baseBranch)) continue;
       if (mergedOnly && !n.mergedAt) continue;
 
+      const firstCommitNode = n.firstCommits.nodes[0]?.commit;
+      const lastCommitNode = n.lastCommits.nodes[0]?.commit;
+      const firstCommitAt = firstCommitNode?.authoredDate ?? firstCommitNode?.committedDate ?? null;
+      const lastCommitAt = lastCommitNode?.authoredDate ?? lastCommitNode?.committedDate ?? null;
 
       let firstReviewAt: string | null = null;
+      let approvalCount = 0;
+      let changesRequestedCount = 0;
+      let commentReviewCount = 0;
       for (const r of n.reviews.nodes) {
         if (r.submittedAt) {
           if (!firstReviewAt || r.submittedAt < firstReviewAt) firstReviewAt = r.submittedAt;
         }
+        if (r.state === 'APPROVED') approvalCount += 1;
+        if (r.state === 'CHANGES_REQUESTED') changesRequestedCount += 1;
+        if (r.state === 'COMMENTED') commentReviewCount += 1;
       }
 
 
@@ -170,7 +199,13 @@ export async function getGithubPRsWithStats(params: {
         additions: n.additions,
         deletions: n.deletions,
         changedFiles: n.changedFiles,
-        commitCount: n.commits.totalCount,
+        commitCount: n.firstCommits.totalCount,
+        firstCommitAt,
+        lastCommitAt,
+        reviewCount: n.reviews.totalCount,
+        approvalCount,
+        changesRequestedCount,
+        commentReviewCount,
         repository: { owner: n.repository.owner.login, name: n.repository.name },
         firstReviewAt,
         readyForReviewAt,
