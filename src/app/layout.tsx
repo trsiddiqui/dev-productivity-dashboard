@@ -45,6 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <nav className="app-nav">
             <div className="brand">Dev Productivity Dashboard</div>
             <Link href="/individual">Individual</Link>
+            <Link href="/contributions">Contributions</Link>
             <Link href="/sprint">Sprint</Link>
             <div className="spacer" />
             <LogoutButton />

@@ -35,7 +35,7 @@ const palette = {
 
 function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | null {
   if (!active || !payload || payload.length === 0) return null;
-  const commits = payload.find(p => (p as { dataKey?: string }).dataKey === 'commits')?.value ?? 0;
+  const prsMerged = payload.find(p => (p as { dataKey?: string }).dataKey === 'commits')?.value ?? 0;
   const additions = payload.find(p => (p as { dataKey?: string }).dataKey === 'additions')?.value ?? 0;
   const deletions = payload.find(p => (p as { dataKey?: string }).dataKey === 'deletions')?.value ?? 0;
 
@@ -63,7 +63,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
       }}
     >
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{displayLabel}</div>
-      <div style={{ fontSize: 13 }}>Commits: {commits}</div>
+      <div style={{ fontSize: 13 }}>PRs merged to dev: {prsMerged}</div>
       <div style={{ fontSize: 13 }}>Lines added: {additions}</div>
       <div style={{ fontSize: 13 }}>Lines deleted: {deletions}</div>
     </div>
@@ -122,7 +122,7 @@ export function CommitsByDay({ items }: Props): JSX.Element {
 
   return (
     <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
-      <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Commits by Day</h2>
+      <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Merged to Dev by Day</h2>
       <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
@@ -156,7 +156,7 @@ export function CommitsByDay({ items }: Props): JSX.Element {
             <XAxis dataKey="date" stroke={palette.axis} tickMargin={8} />
             <YAxis stroke={palette.axis} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="commits" name="Commits" fill={palette.commits} />
+            <Bar dataKey="commits" name="PRs merged" fill={palette.commits} />
             <Bar dataKey="additions" name="Lines added" fill={palette.additions} />
             <Bar dataKey="deletions" name="Lines deleted" fill={palette.deletions} />
           </BarChart>
