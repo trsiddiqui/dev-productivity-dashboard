@@ -128,6 +128,9 @@ export default function Page(): JSX.Element {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Developer Performance Dashboard</h1>
       </header>
+      <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)' }}>
+        GitHub metrics on this page now only include PRs that target <code>dev</code>, so QA and production promotion PRs are excluded.
+      </div>
 
       {}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>

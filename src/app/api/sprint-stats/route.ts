@@ -8,7 +8,7 @@ import {
   getJiraSubtaskIds,
   getQAAssignmentTimesAll,
 } from '@/lib/jira';
-import { getGithubPRStatsByUrls } from '@/lib/github';
+import { DEV_BASE_BRANCH, getGithubPRStatsByUrls } from '@/lib/github';
 import type {
   SprintStatsResponse,
   JiraIssue,
@@ -166,7 +166,7 @@ export async function GET(req: Request) {
       }
 
 
-      const statsByUrl = await getGithubPRStatsByUrls(Array.from(allUrls));
+      const statsByUrl = await getGithubPRStatsByUrls(Array.from(allUrls), { baseBranch: DEV_BASE_BRANCH });
 
 
       for (const p of parents) {

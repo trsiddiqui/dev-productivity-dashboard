@@ -7,6 +7,8 @@ export interface PR {
   url: string;
   // Source branch name for the PR
   headRefName?: string;
+  // Target branch name for the PR
+  baseRefName?: string;
 
   createdAt: string;
   mergedAt: string | null;
@@ -16,6 +18,8 @@ export interface PR {
 
   additions: number;
   deletions: number;
+  changedFiles?: number;
+  commitCount?: number;
   repository: { owner: string; name: string };
 
 
@@ -105,6 +109,52 @@ export interface CommitTimeseriesItem {
   commits: number;
   additions: number;
   deletions: number;
+}
+
+export interface ContributionDailyItem {
+  date: string;
+  prCount: number;
+  additions: number;
+  deletions: number;
+  locChanged: number;
+}
+
+export interface ContributionRepoItem {
+  repo: string;
+  prs: number;
+  additions: number;
+  deletions: number;
+  locChanged: number;
+}
+
+export interface ContributionKpis {
+  totalPRs: number;
+  totalAdditions: number;
+  totalDeletions: number;
+  totalLocChanged: number;
+  activeDays: number;
+  activeDayRate: number;
+  medianLocPerPR: number;
+  avgLocPerPR: number;
+  avgLocPerActiveDay: number;
+  longestIdleGapDays: number;
+  burstiestDayShare: number;
+  avgDaysBetweenPRs: number | null;
+}
+
+export interface ContributionResponse {
+  from: string;
+  to: string;
+  login: string;
+  baseBranch: string;
+  dateMode: 'created' | 'merged';
+  mergedOnly: boolean;
+  repo?: string;
+  kpis: ContributionKpis;
+  daily: ContributionDailyItem[];
+  repos: ContributionRepoItem[];
+  prs: PR[];
+  warnings?: string[];
 }
 
 

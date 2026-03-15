@@ -2,6 +2,10 @@ import { cfg } from './config';
 import type { CommitTimeseriesItem, GithubUser, PR } from './types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 
+export const DEV_BASE_BRANCH = 'dev';
+
+type GithubPRDateField = 'created' | 'merged';
+
 interface GHRepoOwner { login: string }
 interface GHRepo { name: string; owner: GHRepoOwner }
 interface GHReviewNode { submittedAt: string | null; state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING' }
@@ -15,6 +19,7 @@ interface GHPullRequestNode {
   title: string;
   url: string;
   headRefName: string;
+  baseRefName: string;
   createdAt: string;
   mergedAt: string | null;
   closedAt: string | null;
@@ -22,6 +27,8 @@ interface GHPullRequestNode {
   isDraft: boolean;
   additions: number;
   deletions: number;
+  changedFiles: number;
+  commits: { totalCount: number };
   repository: GHRepo;
   reviews: { nodes: GHReviewNode[] };
   timelineItems: GHTimeline;
@@ -35,12 +42,31 @@ export async function getGithubPRsWithStats(params: {
   login: string;
   from: string;
   to: string;
+  baseBranch?: string;
+  repo?: string;
+  mergedOnly?: boolean;
+  dateField?: GithubPRDateField;
 }): Promise<PR[]> {
-  const { login, from, to } = params;
+  const {
+    login,
+    from,
+    to,
+    baseBranch = DEV_BASE_BRANCH,
+    repo,
+    mergedOnly = false,
+    dateField = 'created',
+  } = params;
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
 
-  const scope = buildScopeFilter();
-  const q = `is:pr author:${login} created:${from}..${to} ${scope}`.trim();
+  const scope = buildScopeFilter(repo);
+  const q = [
+    'is:pr',
+    `author:${login}`,
+    `base:${baseBranch}`,
+    scope,
+    dateField === 'merged' ? 'is:merged' : mergedOnly ? 'is:merged' : '',
+    dateField === 'merged' ? `merged:${from}..${to}` : `created:${from}..${to}`,
+  ].filter(Boolean).join(' ');
 
   const query = `
     query($q: String!, $first: Int!, $after: String) {
@@ -54,6 +80,7 @@ export async function getGithubPRsWithStats(params: {
               title
               url
               headRefName
+              baseRefName
               createdAt
               mergedAt
               closedAt
@@ -61,6 +88,10 @@ export async function getGithubPRsWithStats(params: {
               isDraft
               additions
               deletions
+              changedFiles
+              commits(first: 1) {
+                totalCount
+              }
               repository { name owner { login } }
 
               reviews(first: 50) {
@@ -103,6 +134,8 @@ export async function getGithubPRsWithStats(params: {
 
     for (const edge of data.edges) {
       const n = edge.node;
+      if (!isMatchingBaseBranch(n.baseRefName, baseBranch)) continue;
+      if (mergedOnly && !n.mergedAt) continue;
 
 
       let firstReviewAt: string | null = null;
@@ -128,6 +161,7 @@ export async function getGithubPRsWithStats(params: {
         title: n.title,
         url: n.url,
         headRefName: n.headRefName,
+        baseRefName: n.baseRefName,
         createdAt: n.createdAt,
         mergedAt: n.mergedAt,
         closedAt: n.closedAt,
@@ -135,6 +169,8 @@ export async function getGithubPRsWithStats(params: {
         isDraft: n.isDraft,
         additions: n.additions,
         deletions: n.deletions,
+        changedFiles: n.changedFiles,
+        commitCount: n.commits.totalCount,
         repository: { owner: n.repository.owner.login, name: n.repository.name },
         firstReviewAt,
         readyForReviewAt,
@@ -145,7 +181,11 @@ export async function getGithubPRsWithStats(params: {
     after = data.pageInfo.endCursor;
   }
 
-  return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return out.sort((a, b) => {
+    const left = dateField === 'merged' ? (a.mergedAt ?? a.createdAt) : a.createdAt;
+    const right = dateField === 'merged' ? (b.mergedAt ?? b.createdAt) : b.createdAt;
+    return left.localeCompare(right);
+  });
 }
 
 export async function getGithubCommitsByDay(params: {
@@ -229,11 +269,19 @@ export async function getGithubCommitsByDay(params: {
   return series;
 }
 
-function buildScopeFilter(): string {
+function buildScopeFilter(repo?: string): string {
+  if (repo) {
+    const scopedRepo = repo.includes('/') ? repo : (cfg.githubOrg ? `${cfg.githubOrg}/${repo}` : repo);
+    return `repo:${scopedRepo}`;
+  }
   const parts: string[] = [];
   if (cfg.githubOrg) parts.push(`org:${cfg.githubOrg}`);
   if (cfg.githubRepos.length) parts.push(cfg.githubRepos.map(r => `repo:${r}`).join(' '));
   return parts.join(' ');
+}
+
+function isMatchingBaseBranch(actual?: string | null, expected = DEV_BASE_BRANCH): boolean {
+  return (actual ?? '').trim().toLowerCase() === expected.trim().toLowerCase();
 }
 
 
@@ -291,9 +339,11 @@ function parsePullUrl(url: string): PullRef | null {
 }
 
 export async function getGithubPRStatsByUrls(
-  urls: string[]
+  urls: string[],
+  params?: { baseBranch?: string }
 ): Promise<Record<string, { additions: number; deletions: number; reviewComments?: number }>> {
   if (!cfg.githubToken) return {};
+  const baseBranch = params?.baseBranch ?? DEV_BASE_BRANCH;
   const refs = urls
     .map(parsePullUrl)
     .filter((x): x is PullRef => !!x);
@@ -310,6 +360,7 @@ export async function getGithubPRStatsByUrls(
         pullRequest(number: $number) {
           number
           url
+          baseRefName
           additions
           deletions
           reviewThreads(first: 100) {
@@ -342,6 +393,7 @@ export async function getGithubPRStatsByUrls(
                 pullRequest?: {
                   number: number;
                   url: string;
+                  baseRefName: string;
                   additions: number;
                   deletions: number;
                   reviewThreads?: {
@@ -353,7 +405,12 @@ export async function getGithubPRStatsByUrls(
           };
           const json = await resp.json() as PRStatsResponse;
           const pr = json?.data?.repository?.pullRequest;
-          if (pr && typeof pr.additions === 'number' && typeof pr.deletions === 'number') {
+          if (
+            pr &&
+            isMatchingBaseBranch(pr.baseRefName, baseBranch) &&
+            typeof pr.additions === 'number' &&
+            typeof pr.deletions === 'number'
+          ) {
             const commentSum =
               pr.reviewThreads?.nodes?.reduce((acc, n) => acc + (n.comments?.totalCount ?? 0), 0) ?? 0;
 

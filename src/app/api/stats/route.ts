@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getGithubCommitsByDay, getGithubPRsWithStats } from '../../../lib/github';
+import { DEV_BASE_BRANCH, getGithubPRsWithStats } from '../../../lib/github';
 import { getJiraIssuesUpdated, getIssuePhaseTimes, getJiraIssuePRs } from '../../../lib/jira';
 import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
+import { aggregateContributionPRsByDay } from '../../../lib/contributions';
 import type { StatsResponse, KPIs, JiraIssue, PR, LinkedPR, CommitTimeseriesItem } from '../../../lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
 
@@ -23,18 +24,7 @@ export async function GET(req: Request) {
     if (!login || !from || !to) {
       return NextResponse.json({ error: 'Missing required params: login, from, to' }, { status: 400 });
     }
-
-
-  const prs = await getGithubPRsWithStats({ login, from, to });
-
-    let commitTimeseries: CommitTimeseriesItem[] = [];
-    try {
-      commitTimeseries = await getGithubCommitsByDay({ login, from, to });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      warnings.push(`GitHub commits fetch skipped: ${msg}`);
-      commitTimeseries = [];
-    }
+    const prs = await getGithubPRsWithStats({ login, from, to, baseBranch: DEV_BASE_BRANCH });
 
 
     let jiraIssues: JiraIssue[] = [];
@@ -131,6 +121,12 @@ export async function GET(req: Request) {
 
 
     const timeseries = aggregateDaily({ from, to, prs: prsLinked, jiraIssues });
+    const commitTimeseries: CommitTimeseriesItem[] = aggregateContributionPRsByDay({
+      from,
+      to,
+      prs: prsLinked.filter((pr) => !!pr.mergedAt),
+      dateMode: 'merged',
+    });
 
   const lifecycle = computeLifecycle(prsLinked, { workStartedByPrUrl, jiraMetaByPrUrl });
 
