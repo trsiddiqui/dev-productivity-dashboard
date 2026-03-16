@@ -490,19 +490,20 @@ export async function getJiraSprintScopeChanges(
 
 export async function getIssuePhaseTimes(
   issueKeys: string[],
-  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[] },
+  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[]; merged?: string[] },
   opts?: { from?: string; to?: string; actorAccountId?: string }
-): Promise<Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }>> {
+): Promise<Record<string, { todo?: string; inProgress?: string; merged?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }>> {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
   const todoSet = new Set(stages.todo.map(norm));
   const inProgSet = new Set(stages.inProgress.map(norm));
+  const mergedSet = new Set((stages.merged ?? []).map(norm));
   const reviewSet = new Set(stages.review.map(norm));
   const completeSet = new Set(stages.complete.map(norm));
 
-  const out: Record<string, { todo?: string; inProgress?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }> = {};
+  const out: Record<string, { todo?: string; inProgress?: string; merged?: string; review?: string; complete?: string; updatedByActorInWindow?: boolean }> = {};
   const fromMs = opts?.from ? new Date(opts.from).getTime() : NaN;
   const toMs = opts?.to ? new Date(opts.to).getTime() : NaN;
   const actorId = opts?.actorAccountId;
@@ -524,6 +525,7 @@ export async function getIssuePhaseTimes(
 
       let todoFirst: string | undefined = data.fields?.created;
       let inProgFirst: string | undefined;
+      let mergedFirst: string | undefined;
       let reviewFirst: string | undefined;
       let completeFirst: string | undefined;
 
@@ -538,6 +540,7 @@ export async function getIssuePhaseTimes(
           if (it.field !== 'status' || !it.toString) continue;
           const to = norm(it.toString);
           if (!inProgFirst && inProgSet.has(to)) inProgFirst = when;
+          if (!mergedFirst && mergedSet.has(to)) mergedFirst = when;
           if (!reviewFirst && reviewSet.has(to)) reviewFirst = when;
           if (!completeFirst && completeSet.has(to)) completeFirst = when;
           if (!todoFirst && todoSet.has(to)) todoFirst = when;
@@ -547,7 +550,14 @@ export async function getIssuePhaseTimes(
         }
       }
 
-      out[key] = { todo: todoFirst, inProgress: inProgFirst, review: reviewFirst, complete: completeFirst, updatedByActorInWindow: updatedByActor };
+      out[key] = {
+        todo: todoFirst,
+        inProgress: inProgFirst,
+        merged: mergedFirst,
+        review: reviewFirst,
+        complete: completeFirst,
+        updatedByActorInWindow: updatedByActor,
+      };
     } catch {
       // ignore per-issue failures
     }
@@ -598,6 +608,13 @@ export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string
   return result;
 }
 
+function isJiraSubtaskField(value: unknown): boolean {
+  const issueType = value as { name?: string; subtask?: boolean } | undefined;
+  if (issueType?.subtask === true) return true;
+  const name = (issueType?.name ?? '').trim().toLowerCase();
+  return name === 'sub-task' || name === 'subtask';
+}
+
 export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssue[]> {
   if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken || issueKeys.length === 0) return [];
 
@@ -631,6 +648,7 @@ export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssu
       const spUnknown = issue.fields[cfg.jiraStoryPointsField];
       const storyPoints = typeof spUnknown === 'number' ? spUnknown : undefined;
       const assigneeField = issue.fields.assignee;
+      const issueTypeField = (issue.fields as Record<string, unknown>).issuetype;
 
       byId.set(issue.id, {
         id: issue.id,
@@ -643,7 +661,8 @@ export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssu
         updated: issue.fields.updated,
         created: issue.fields.created,
         resolutiondate: issue.fields.resolutiondate,
-        issueType: ((issue.fields as Record<string, unknown>).issuetype as { name?: string } | undefined)?.name,
+        issueType: (issueTypeField as { name?: string } | undefined)?.name,
+        isSubtask: isJiraSubtaskField(issueTypeField),
         parentKey: ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key,
         epicKey: (issue.fields as Record<string, unknown>).customfield_10014 as (string | undefined),
       });

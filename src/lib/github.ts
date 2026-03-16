@@ -3,6 +3,7 @@ import type { CommitTimeseriesItem, GithubUser, PR } from './types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 
 export const DEV_BASE_BRANCH = 'dev';
+const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 
 type GithubPRDateField = 'created' | 'merged';
 
@@ -302,6 +303,56 @@ export async function getGithubCommitsByDay(params: {
   });
 
   return series;
+}
+
+export async function getGithubCommitJiraKeys(params: {
+  login: string;
+  from: string;
+  to: string;
+  repo?: string;
+}): Promise<string[]> {
+  const { login, from, to, repo } = params;
+  if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
+
+  const SEARCH_LIMIT = 1000;
+  const PER_PAGE = 100;
+  const scope = buildScopeFilter(repo);
+  const q = `author:${login} committer-date:${from}..${to} ${scope}`.trim();
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${cfg.githubToken}`,
+    Accept: 'application/vnd.github.cloak-preview',
+  };
+
+  const keys = new Set<string>();
+  let page = 1;
+  let fetched = 0;
+  while (true) {
+    const url = new URL('https://api.github.com/search/commits');
+    url.searchParams.set('q', q);
+    url.searchParams.set('sort', 'committer-date');
+    url.searchParams.set('order', 'asc');
+    url.searchParams.set('per_page', PER_PAGE.toString());
+    url.searchParams.set('page', page.toString());
+
+    const resp = await fetch(url.toString(), { headers });
+    const json = await resp.json();
+    if (!resp.ok) {
+      throw new Error(`GitHub commit search error: ${JSON.stringify(json)}`);
+    }
+
+    const items: Array<{ commit?: { message?: string } }> = json.items ?? [];
+    for (const item of items) {
+      const matches = item.commit?.message?.toUpperCase().match(JIRA_KEY_RE) ?? [];
+      matches.forEach((match) => keys.add(match));
+    }
+
+    fetched += items.length;
+    if (items.length < PER_PAGE || fetched >= SEARCH_LIMIT) break;
+    page += 1;
+  }
+
+  return Array.from(keys).sort((left, right) => left.localeCompare(right));
 }
 
 function buildScopeFilter(repo?: string): string {

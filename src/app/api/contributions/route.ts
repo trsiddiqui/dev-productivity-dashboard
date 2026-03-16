@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DEV_BASE_BRANCH, getGithubPRsWithStats } from '@/lib/github';
+import { DEV_BASE_BRANCH, getGithubCommitJiraKeys, getGithubPRsWithStats } from '@/lib/github';
 import {
   aggregateContributionDaily,
   aggregateContributionWip,
@@ -10,12 +10,53 @@ import {
   extractJiraKeysFromPRs,
   summarizeRepoContributions,
 } from '@/lib/contributions';
-import type { ContributionResponse, JiraIssue } from '@/lib/types';
+import type {
+  ContributionIssueLinkSource,
+  ContributionLinkedTicket,
+  ContributionResponse,
+  JiraIssue,
+} from '@/lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
-import { getIssuePhaseTimes, getJiraIssuesByKeys } from '@/lib/jira';
+import { getIssuePhaseTimes, getJiraIssuePRs, getJiraIssuesByKeys } from '@/lib/jira';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const linkSourceOrder: Record<ContributionIssueLinkSource, number> = {
+  'dev-status': 0,
+  'pr-metadata': 1,
+  'commit-metadata': 2,
+};
+
+function normalizePullUrl(url?: string): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const apiMatch = parsed.hostname === 'api.github.com'
+      ? parsed.pathname.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)/i)
+      : null;
+    if (apiMatch) return `${apiMatch[1]}/${apiMatch[2]}#${apiMatch[3]}`;
+
+    const webMatch = parsed.hostname.endsWith('github.com')
+      ? parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/pulls?\/(\d+)/i)
+      : null;
+    if (webMatch) return `${webMatch[1]}/${webMatch[2]}#${webMatch[3]}`;
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function mergeLinkSources(
+  existing: ContributionIssueLinkSource[] | undefined,
+  next: ContributionIssueLinkSource[] | undefined,
+): ContributionIssueLinkSource[] | undefined {
+  const merged = new Set<ContributionIssueLinkSource>([...(existing ?? []), ...(next ?? [])]);
+  if (merged.size === 0) return undefined;
+  return Array.from(merged).sort((left, right) => linkSourceOrder[left] - linkSourceOrder[right]);
+}
 
 export async function GET(req: Request) {
   const auth = await requireAuthOr401(req);
@@ -47,17 +88,148 @@ export async function GET(req: Request) {
       dateField: dateMode,
     });
 
-    const issueKeys = extractJiraKeysFromPRs(prs);
-    let issues: JiraIssue[] = [];
+    let prsOpenedInWindow = [] as typeof prs;
+    let commitIssueKeys: string[] = [];
 
-    if (issueKeys.length > 0) {
+    await Promise.all([
+      getGithubPRsWithStats({
+        login,
+        from,
+        to,
+        repo,
+        baseBranch: DEV_BASE_BRANCH,
+        mergedOnly: false,
+        dateField: 'created',
+      })
+        .then((items) => {
+          prsOpenedInWindow = items;
+        })
+        .catch((err) => {
+          warnings.push(`Story point PR-open metric unavailable: ${err instanceof Error ? err.message : String(err)}`);
+        }),
+      getGithubCommitJiraKeys({ login, from, to, repo })
+        .then((keys) => {
+          commitIssueKeys = keys;
+        })
+        .catch((err) => {
+          warnings.push(`Story point commit metric unavailable: ${err instanceof Error ? err.message : String(err)}`);
+        }),
+    ]);
+
+    const issueKeys = extractJiraKeysFromPRs(prs);
+    const openedIssueKeys = extractJiraKeysFromPRs(prsOpenedInWindow);
+    const touchedIssueKeys = Array.from(new Set([...openedIssueKeys, ...commitIssueKeys]))
+      .sort((left, right) => left.localeCompare(right));
+    const linkedIssueKeySet = new Set(issueKeys);
+    const touchedIssueKeySet = new Set(touchedIssueKeys);
+    const commitIssueKeySet = new Set(commitIssueKeys);
+    const allIssueKeys = Array.from(new Set([...issueKeys, ...touchedIssueKeys]))
+      .sort((left, right) => left.localeCompare(right));
+    const currentPrRefs = new Set(prs.map((pr) => normalizePullUrl(pr.url)).filter((ref): ref is string => !!ref));
+    const openedPrRefs = new Set(prsOpenedInWindow.map((pr) => normalizePullUrl(pr.url)).filter((ref): ref is string => !!ref));
+    let issues: JiraIssue[] = [];
+    let linkedTickets: ContributionLinkedTicket[] = [];
+    let touchedTicketStoryPoints = 0;
+
+    if (allIssueKeys.length > 0) {
       try {
-        issues = await getJiraIssuesByKeys(issueKeys);
+        const jiraIssues = await getJiraIssuesByKeys(allIssueKeys);
+        const parentKeys = Array.from(new Set(
+          jiraIssues
+            .filter((issue) => issue.isSubtask && !!issue.parentKey)
+            .map((issue) => issue.parentKey as string),
+        )).sort((left, right) => left.localeCompare(right));
+        const parentIssues = parentKeys.length > 0
+          ? await getJiraIssuesByKeys(parentKeys).catch((err) => {
+            warnings.push(`Jira parent ticket fetch unavailable: ${err instanceof Error ? err.message : String(err)}`);
+            return [] as JiraIssue[];
+          })
+          : [];
+        const parentByKey = new Map(parentIssues.map((issue) => [issue.key, issue]));
+        const linkedByIssueId = await getJiraIssuePRs(jiraIssues.map((issue) => issue.id))
+          .catch((err) => {
+            warnings.push(`Jira dev-status linkage unavailable: ${err instanceof Error ? err.message : String(err)}`);
+            return {} as Record<string, NonNullable<JiraIssue['linkedPRs']>>;
+          });
+
+        for (const issue of jiraIssues) {
+          issue.linkedPRs = linkedByIssueId[issue.id] ?? [];
+          const linkSources = new Set<ContributionIssueLinkSource>();
+          if ((issue.linkedPRs ?? []).some((pr) => {
+            const ref = normalizePullUrl(pr.url);
+            return !!ref && currentPrRefs.has(ref);
+          })) {
+            linkSources.add('dev-status');
+          }
+          if (linkedIssueKeySet.has(issue.key)) {
+            linkSources.add('pr-metadata');
+          }
+          if (commitIssueKeySet.has(issue.key)) {
+            linkSources.add('commit-metadata');
+          }
+          issue.linkSources = Array.from(linkSources)
+            .sort((left, right) => linkSourceOrder[left] - linkSourceOrder[right]);
+        }
+
+        const linkedTicketMap = new Map<string, ContributionLinkedTicket>();
+        const touchedDisplayKeys = new Set<string>();
+
+        for (const issue of jiraIssues) {
+          const displayIssue = issue.isSubtask && issue.parentKey
+            ? (parentByKey.get(issue.parentKey) ?? issue)
+            : issue;
+          const displayKey = displayIssue.key;
+          const displayRow = linkedTicketMap.get(displayKey) ?? {
+            key: displayIssue.key,
+            summary: displayIssue.summary,
+            status: displayIssue.status,
+            storyPoints: displayIssue.storyPoints,
+            url: displayIssue.url,
+            issueType: displayIssue.issueType,
+            linkSources: [],
+            sourceIssueKeys: [],
+          };
+
+          displayRow.linkSources = mergeLinkSources(displayRow.linkSources, issue.linkSources) ?? [];
+          displayRow.sourceIssueKeys = Array.from(new Set([
+            ...(displayRow.sourceIssueKeys ?? []),
+            issue.key,
+          ])).sort((left, right) => left.localeCompare(right));
+          linkedTicketMap.set(displayKey, displayRow);
+
+          const matchedByMetadata = touchedIssueKeySet.has(issue.key);
+          const matchedByDevStatus = (issue.linkedPRs ?? []).some((pr) => {
+            const ref = normalizePullUrl(pr.url);
+            return !!ref && openedPrRefs.has(ref);
+          });
+
+          if (matchedByMetadata || matchedByDevStatus) {
+            touchedDisplayKeys.add(displayKey);
+          }
+        }
+
+        linkedTickets = Array.from(linkedTicketMap.values())
+          .filter((ticket) => (ticket.linkSources?.length ?? 0) > 0)
+          .sort((left, right) => left.key.localeCompare(right.key));
+
+        issues = jiraIssues.filter((issue) => (
+          linkedIssueKeySet.has(issue.key)
+          || (issue.linkedPRs ?? []).some((pr) => {
+            const ref = normalizePullUrl(pr.url);
+            return !!ref && currentPrRefs.has(ref);
+          })
+        ));
+
+        touchedTicketStoryPoints = linkedTickets.reduce((sum, ticket) => (
+          touchedDisplayKeys.has(ticket.key) ? sum + (ticket.storyPoints ?? 0) : sum
+        ), 0);
+
         const phaseTimes = await getIssuePhaseTimes(
           issues.map((issue) => issue.key),
           {
             todo: ['To Do', 'Open', 'Backlog', 'Selected for Development'],
-            inProgress: ['In Progress', 'Merged', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'],
+            inProgress: ['In Progress', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'],
+            merged: ['Merged'],
             review: ['Reviewed', 'Review', 'In Review'],
             complete: ['Done', 'Approved'],
           },
@@ -68,6 +240,7 @@ export async function GET(req: Request) {
           if (!phase) continue;
           issue.todoAt = phase.todo;
           issue.inProgressAt = phase.inProgress;
+          issue.mergedAt = phase.merged;
           issue.reviewAt = phase.review;
           issue.completeAt = phase.complete;
         }
@@ -85,11 +258,12 @@ export async function GET(req: Request) {
       dateMode,
       mergedOnly,
       repo,
-      kpis: computeContributionKpis({ from, to, prs, dateMode }),
+      kpis: computeContributionKpis({ from, to, prs, dateMode, touchedTicketStoryPoints }),
       daily: aggregateContributionDaily({ from, to, prs, dateMode }),
       repos: summarizeRepoContributions(prs),
       prs,
       issues,
+      linkedTickets,
       reviews: computeContributionReviewSummary(prs),
       prCycle: computeContributionPRCycleSummary(prs),
       issueCycle: computeContributionIssueCycleSummary(issues),
