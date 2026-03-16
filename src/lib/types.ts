@@ -43,6 +43,20 @@ export interface LinkedPR {
   source?: 'dev-status' | 'commit-msg' | 'custom';
 }
 
+export type ContributionIssueLinkSource = 'dev-status' | 'pr-metadata' | 'commit-metadata';
+export type ContributionGapMode = 'weekdays' | 'calendar';
+
+export interface ContributionLinkedTicket {
+  key: string;
+  summary: string;
+  status?: string;
+  storyPoints?: number;
+  url: string;
+  issueType?: string;
+  linkSources?: ContributionIssueLinkSource[];
+  sourceIssueKeys?: string[];
+}
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -57,6 +71,7 @@ export interface JiraIssue {
   created?: string;
   updated?: string;
   issueType?: string;
+  isSubtask?: boolean;
   parentKey?: string;
   epicKey?: string;
 
@@ -73,6 +88,7 @@ export interface JiraIssue {
 
   todoAt?: string;
   inProgressAt?: string;
+  mergedAt?: string;
   reviewAt?: string;
   completeAt?: string;
 
@@ -85,6 +101,7 @@ export interface JiraIssue {
 
 
   linkedPRs?: LinkedPR[];
+  linkSources?: ContributionIssueLinkSource[];
   prAdditions?: number;
   prDeletions?: number;
   prReviewComments?: number;
@@ -169,6 +186,7 @@ export interface ContributionKpis {
   totalAdditions: number;
   totalDeletions: number;
   totalLocChanged: number;
+  touchedTicketStoryPoints: number;
   activeDays: number;
   activeDayRate: number;
   medianLocPerPR: number;
@@ -192,6 +210,7 @@ export interface ContributionResponse {
   repos: ContributionRepoItem[];
   prs: PR[];
   issues: JiraIssue[];
+  linkedTickets: ContributionLinkedTicket[];
   reviews: ContributionReviewSummary;
   prCycle: ContributionPRCycleSummary;
   issueCycle: ContributionIssueCycleSummary;

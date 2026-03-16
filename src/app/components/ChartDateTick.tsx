@@ -26,8 +26,7 @@ export function DateAxisTick({ x = 0, y = 0, payload, color = '#94a3b8' }: AxisT
   return (
     <g transform={`translate(${x},${y})`}>
       <text dy={12} textAnchor="middle" fill={color} fontSize={11}>
-        <tspan x={0}>{label}</tspan>
-        {weekday ? <tspan x={0} dy={12}>{weekday}</tspan> : null}
+        <tspan x={0}>{weekday ?? label}</tspan>
       </text>
     </g>
   );

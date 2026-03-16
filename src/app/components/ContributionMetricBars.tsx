@@ -14,6 +14,7 @@ import type { JSX } from 'react';
 
 export interface ContributionMetricBarItem {
   label: string;
+  subtitle?: string;
   value: number;
   fill?: string;
 }
@@ -34,6 +35,13 @@ interface TooltipProps {
   payload?: TooltipPayloadItem[];
 }
 
+interface AxisTickProps {
+  x?: number;
+  y?: number;
+  index?: number;
+  payload?: { value?: string | number; index?: number };
+}
+
 export function ContributionMetricBars({
   title,
   subtitle,
@@ -41,6 +49,8 @@ export function ContributionMetricBars({
   valueFormatter = (value) => value.toLocaleString(),
 }: Props): JSX.Element {
   const rows = items.filter((item) => Number.isFinite(item.value));
+  const hasSubtitles = rows.some((item) => !!item.subtitle);
+  const rowHeight = hasSubtitles ? 54 : 42;
 
   function CustomTooltip({ active, payload }: TooltipProps): JSX.Element | null {
     const row = payload?.[0]?.payload;
@@ -56,8 +66,31 @@ export function ContributionMetricBars({
         boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
       }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>{row.label}</div>
+        {row.subtitle ? (
+          <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{row.subtitle}</div>
+        ) : null}
         <div style={{ fontSize: 13 }}>{valueFormatter(row.value)}</div>
       </div>
+    );
+  }
+
+  function CategoryTick({ x = 0, y = 0, index, payload }: AxisTickProps): JSX.Element {
+    const rowIndex = typeof index === 'number'
+      ? index
+      : (typeof payload?.index === 'number' ? payload.index : -1);
+    const row = rows[rowIndex] ?? rows.find((item) => item.label === String(payload?.value ?? ''));
+
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={4} textAnchor="end" fill="#e2e8f0" fontSize={12}>
+          <tspan x={0}>{row?.label ?? String(payload?.value ?? '')}</tspan>
+          {row?.subtitle ? (
+            <tspan x={0} dy={14} fontSize={11} fill="#94a3b8">
+              {row.subtitle}
+            </tspan>
+          ) : null}
+        </text>
+      </g>
     );
   }
 
@@ -67,12 +100,19 @@ export function ContributionMetricBars({
         <h3 style={{ fontSize: 18, fontWeight: 600 }}>{title}</h3>
         {subtitle && <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>{subtitle}</p>}
       </div>
-      <div style={{ width: '100%', height: Math.max(220, rows.length * 42) }}>
+      <div style={{ width: '100%', height: Math.max(220, rows.length * rowHeight) }}>
         <ResponsiveContainer>
-          <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, left: 24, bottom: 8 }}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
             <XAxis type="number" stroke="#94a3b8" />
-            <YAxis type="category" dataKey="label" stroke="#94a3b8" width={140} />
+            <YAxis
+              type="category"
+              dataKey="label"
+              stroke="#94a3b8"
+              width={hasSubtitles ? 190 : 140}
+              interval={0}
+              tick={<CategoryTick />}
+            />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>
               {rows.map((item) => (

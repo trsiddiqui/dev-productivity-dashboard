@@ -3,7 +3,7 @@
 import type { CSSProperties, JSX } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
-import type { ContributionResponse, GithubUser, UsersResponse } from '@/lib/types';
+import type { ContributionGapMode, ContributionResponse, GithubUser, UsersResponse } from '@/lib/types';
 import { SearchableSelect, type Option } from '../components/SearchableSelect';
 import { ContributionProfile } from '../components/ContributionProfile';
 import {
@@ -26,6 +26,7 @@ export default function ContributionsPage(): JSX.Element {
   const [repo, setRepo] = useState('');
   const [dateMode, setDateMode] = useState<'created' | 'merged'>('merged');
   const [mergedOnly, setMergedOnly] = useState(true);
+  const [gapMode, setGapMode] = useState<ContributionGapMode>('weekdays');
   const [from, setFrom] = useState(formatISO(subDays(new Date(), 14), { representation: 'date' }));
   const [to, setTo] = useState(formatISO(new Date(), { representation: 'date' }));
 
@@ -120,6 +121,11 @@ export default function ContributionsPage(): JSX.Element {
     return [
       { metric: 'Dev PRs', primary: primaryData.kpis.totalPRs, secondary: secondaryData.kpis.totalPRs },
       { metric: 'LOC changed', primary: primaryData.kpis.totalLocChanged, secondary: secondaryData.kpis.totalLocChanged },
+      {
+        metric: 'Touched ticket SP',
+        primary: primaryData.kpis.touchedTicketStoryPoints,
+        secondary: secondaryData.kpis.touchedTicketStoryPoints,
+      },
       { metric: 'Active days', primary: primaryData.kpis.activeDays, secondary: secondaryData.kpis.activeDays },
       { metric: 'Active day %', primary: primaryData.kpis.activeDayRate, secondary: secondaryData.kpis.activeDayRate },
       { metric: 'Review coverage %', primary: primaryData.reviews.reviewCoveragePct, secondary: secondaryData.reviews.reviewCoveragePct },
@@ -155,13 +161,14 @@ export default function ContributionsPage(): JSX.Element {
         <h2 style={{ fontSize: 18, fontWeight: 600 }}>What This Represents</h2>
         <div style={{ display: 'grid', gap: 6, marginTop: 8, fontSize: 14 }}>
           <div>- This view treats the first PR into <code>dev</code> as the engineer&apos;s real code contribution.</div>
+          <div>- <code>Touched Ticket SP</code> sums unique Jira story points for tickets with a dev PR opened or a commit made during the selected window, using Jira dev-status links where available and rolling subtasks up to parent ticket points.</div>
           <div>- Long flat activity stretches often point to blockers or low delivery cadence.</div>
           <div>- Large one-day spikes usually mean work is batching up instead of landing steadily.</div>
           <div>- Low active-day rate plus low PR volume is the quickest signal that output may be thin.</div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1.2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>
         <div>
           <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>GitHub user</label>
           {ghOptions.length > 0 ? (
@@ -220,6 +227,14 @@ export default function ContributionsPage(): JSX.Element {
         </div>
 
         <div>
+          <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Gap mode</label>
+          <select value={gapMode} onChange={(event) => setGapMode(event.target.value === 'calendar' ? 'calendar' : 'weekdays')} style={inputStyle}>
+            <option value="weekdays">Weekdays only</option>
+            <option value="calendar">All calendar days</option>
+          </select>
+        </div>
+
+        <div>
           <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>From</label>
           <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} style={inputStyle} />
         </div>
@@ -264,14 +279,14 @@ export default function ContributionsPage(): JSX.Element {
             />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
-            <ContributionProfile data={primaryData} title={`${primaryData.login} - Dev Contribution View`} />
-            <ContributionProfile data={secondaryData} title={`${secondaryData.login} - Dev Contribution View`} />
+            <ContributionProfile data={primaryData} title={`${primaryData.login} - Dev Contribution View`} gapMode={gapMode} />
+            <ContributionProfile data={secondaryData} title={`${secondaryData.login} - Dev Contribution View`} gapMode={gapMode} />
           </div>
         </>
       )}
 
       {primaryData && !secondaryData && (
-        <ContributionProfile data={primaryData} />
+        <ContributionProfile data={primaryData} gapMode={gapMode} />
       )}
     </div>
   );

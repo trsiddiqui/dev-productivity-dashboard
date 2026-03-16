@@ -136,8 +136,9 @@ export function computeContributionKpis(params: {
   to: string;
   prs: PR[];
   dateMode?: ContributionDateMode;
+  touchedTicketStoryPoints?: number;
 }): ContributionKpis {
-  const { prs, dateMode = 'merged' } = params;
+  const { prs, dateMode = 'merged', touchedTicketStoryPoints = 0 } = params;
   const daily = aggregateContributionDaily(params);
   const totalAdditions = prs.reduce((sum, pr) => sum + (pr.additions ?? 0), 0);
   const totalDeletions = prs.reduce((sum, pr) => sum + (pr.deletions ?? 0), 0);
@@ -181,6 +182,7 @@ export function computeContributionKpis(params: {
     totalAdditions,
     totalDeletions,
     totalLocChanged,
+    touchedTicketStoryPoints,
     activeDays,
     activeDayRate: round(activeDayRate),
     medianLocPerPR: round(median(locPerPR)),
@@ -267,8 +269,9 @@ export function aggregateContributionWip(params: {
     }, 0);
 
     const activeIssues = issues.reduce((count, issue) => {
+      if (!issue.isSubtask) return count;
       const start = issue.inProgressAt?.slice(0, 10);
-      const end = (issue.completeAt ?? issue.resolutiondate ?? undefined)?.slice(0, 10);
+      const end = (issue.mergedAt ?? issue.completeAt ?? issue.resolutiondate ?? undefined)?.slice(0, 10);
       if (!start || start > key) return count;
       if (end && end <= key) return count;
       return count + 1;
