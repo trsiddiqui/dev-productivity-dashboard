@@ -17,6 +17,7 @@ interface SearchableSelectProps {
   disabled?: boolean;
   emptyHint?: string;
   style?: React.CSSProperties;
+  displayValueOverride?: string;
 }
 
 
@@ -46,6 +47,7 @@ export function SearchableSelect({
   disabled = false,
   emptyHint = 'No matches',
   style,
+  displayValueOverride,
 }: SearchableSelectProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
@@ -83,6 +85,8 @@ export function SearchableSelect({
         .some(s => (s as string).toLowerCase().includes(q))
     );
   }, [items, inputValue]);
+
+  const closedValue = displayValueOverride ?? selected?.label ?? '';
 
   function selectIndex(idx: number) {
     const opt = filtered[idx];
@@ -132,7 +136,7 @@ export function SearchableSelect({
         aria-controls={`list-${id}`}
         aria-autocomplete="list"
         disabled={disabled}
-        value={open ? inputValue : (selected?.label ?? '')}
+        value={open ? inputValue : closedValue}
         placeholder={placeholder}
         onFocus={() => { setOpen(true); setHighlight(0); }}
         onChange={e => { setInputValue(e.target.value); setOpen(true); setHighlight(0); }}
@@ -144,6 +148,8 @@ export function SearchableSelect({
           border: '1px solid #ddd',
           background: t.cardBg,
           color: t.cardFg,
+          fontStyle: displayValueOverride ? 'italic' : 'normal',
+          letterSpacing: displayValueOverride ? '0.02em' : undefined,
         }}
       />
 

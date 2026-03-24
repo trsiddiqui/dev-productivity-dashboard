@@ -17,6 +17,7 @@ interface Props {
   data: ContributionResponse;
   title?: string;
   gapMode: ContributionGapMode;
+  maskIdentity?: boolean;
 }
 
 const sourceLabel: Record<ContributionIssueLinkSource, string> = {
@@ -134,6 +135,10 @@ function gapUnitLabelPlural(gapMode: ContributionGapMode): string {
   return gapMode === 'calendar' ? 'calendar days' : 'weekdays';
 }
 
+function maskedEntityLabel(prefix: 'PR' | 'Ticket' | 'Repository', index: number): string {
+  return `${prefix} ${index + 1}`;
+}
+
 function SourceBadges(props: {
   sources?: ContributionIssueLinkSource[];
   selectedSource?: ContributionIssueLinkSource | null;
@@ -244,7 +249,7 @@ function ReviewStatCard({ label, value }: { label: string; value: string }): JSX
   );
 }
 
-export function ContributionProfile({ data, title, gapMode }: Props): JSX.Element {
+export function ContributionProfile({ data, title, gapMode, maskIdentity = false }: Props): JSX.Element {
   const [selectedLinkSource, setSelectedLinkSource] = useState<ContributionIssueLinkSource | null>(null);
 
   const availableLinkSources = useMemo(
@@ -356,8 +361,8 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
     { label: 'Review -> merge', value: data.prCycle.medianReviewToMergeHours ?? 0, fill: '#ef4444' },
   ];
 
-  const issueCycleItems: ContributionMetricBarItem[] = slowestIssues.map(({ issue, cycleHours }) => ({
-    label: issue.key,
+  const issueCycleItems: ContributionMetricBarItem[] = slowestIssues.map(({ issue, cycleHours }, index) => ({
+    label: maskIdentity ? maskedEntityLabel('Ticket', index) : issue.key,
     subtitle: [
       issue.status?.trim() || 'Status unknown',
       issue.storyPoints !== undefined ? `${issue.storyPoints} SP` : null,
@@ -365,6 +370,16 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
     value: cycleHours,
     fill: '#a855f7',
   }));
+
+  const repoItems = useMemo(
+    () => maskIdentity
+      ? data.repos.map((repo, index) => ({
+        ...repo,
+        repo: maskedEntityLabel('Repository', index),
+      }))
+      : data.repos,
+    [data.repos, maskIdentity],
+  );
 
   const filteredLinkedIssues = useMemo(
     () => [...data.linkedTickets]
@@ -388,6 +403,11 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
           <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
             <code>Touched Ticket SP</code> sums unique Jira story points where a dev PR was opened or a commit referenced the ticket during this window, using Jira dev-status links where available and rolling linked subtasks up to their parent ticket points.
           </p>
+          {maskIdentity ? (
+            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 10, background: 'rgba(15,23,42,0.28)', color: '#cbd5f5', fontSize: 12, fontWeight: 600 }}>
+              Identity masking is on. Developer names, PR references, ticket references, and repo labels are hidden in the detailed sections below.
+            </div>
+          ) : null}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
@@ -467,15 +487,26 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
                 </tr>
               </thead>
               <tbody>
-                {slowestPRs.map(({ pr, cycleHours }) => (
+                {slowestPRs.map(({ pr, cycleHours }, index) => (
                   <tr key={pr.id}>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
-                      <a href={pr.url} target="_blank" rel="noreferrer">
-                        #{pr.number} {pr.title}
-                      </a>
-                      <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                        {pr.repository.owner}/{pr.repository.name}
-                      </div>
+                      {maskIdentity ? (
+                        <div>
+                          <div>{maskedEntityLabel('PR', index)}</div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                            Repository hidden
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <a href={pr.url} target="_blank" rel="noreferrer">
+                            #{pr.number} {pr.title}
+                          </a>
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                            {pr.repository.owner}/{pr.repository.name}
+                          </div>
+                        </>
+                      )}
                     </td>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {formatHours(cycleHours)}
@@ -535,15 +566,19 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
                 </tr>
               </thead>
               <tbody>
-                {filteredLinkedIssues.map((issue) => (
+                {filteredLinkedIssues.map((issue, index) => (
                     <tr key={`link-${issue.key}`}>
                       <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
-                        <a href={issue.url} target="_blank" rel="noreferrer">
-                          {issue.key} {issue.summary}
-                        </a>
+                        {maskIdentity ? (
+                          <span>{maskedEntityLabel('Ticket', index)}</span>
+                        ) : (
+                          <a href={issue.url} target="_blank" rel="noreferrer">
+                            {issue.key} {issue.summary}
+                          </a>
+                        )}
                         <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
                           {issue.issueType ?? 'Ticket'}
-                          {issue.sourceIssueKeys && issue.sourceIssueKeys.some((key) => key !== issue.key)
+                          {!maskIdentity && issue.sourceIssueKeys && issue.sourceIssueKeys.some((key) => key !== issue.key)
                             ? ` - linked via ${issue.sourceIssueKeys.filter((key) => key !== issue.key).join(', ')}`
                             : ''}
                         </div>
@@ -603,12 +638,16 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
                 </tr>
               </thead>
               <tbody>
-                {workingTicketRows.map(({ issue, workHours }) => (
+                {workingTicketRows.map(({ issue, workHours }, index) => (
                   <tr key={issue.key}>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
-                      <a href={issue.url} target="_blank" rel="noreferrer">
-                        {issue.key} {issue.summary}
-                      </a>
+                      {maskIdentity ? (
+                        <span>{maskedEntityLabel('Ticket', index)}</span>
+                      ) : (
+                        <a href={issue.url} target="_blank" rel="noreferrer">
+                          {issue.key} {issue.summary}
+                        </a>
+                      )}
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
                         {issue.status ?? 'Status unknown'}
                       </div>
@@ -671,7 +710,7 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
         />
       )}
 
-      <RepoContributionChart items={data.repos} />
+      <RepoContributionChart items={repoItems} />
 
       <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
         <div style={{ marginBottom: 8 }}>
@@ -693,19 +732,30 @@ export function ContributionProfile({ data, title, gapMode }: Props): JSX.Elemen
                 </tr>
               </thead>
               <tbody>
-                {topPRs.map((pr) => (
+                {topPRs.map((pr, index) => (
                   <tr key={pr.id}>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', whiteSpace: 'nowrap' }}>
                       <DateWithWeekday date={eventDate(pr, data.dateMode)} />
                     </td>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
-                      <a href={pr.url} target="_blank" rel="noreferrer">
-                        #{pr.number} {pr.title}
-                      </a>
-                      <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                        {pr.repository.owner}/{pr.repository.name}
-                        {pr.headRefName ? ` - ${pr.headRefName}` : ''}
-                      </div>
+                      {maskIdentity ? (
+                        <div>
+                          <div>{maskedEntityLabel('PR', index)}</div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                            Repository and branch hidden
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <a href={pr.url} target="_blank" rel="noreferrer">
+                            #{pr.number} {pr.title}
+                          </a>
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                            {pr.repository.owner}/{pr.repository.name}
+                            {pr.headRefName ? ` - ${pr.headRefName}` : ''}
+                          </div>
+                        </>
+                      )}
                     </td>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {((pr.additions ?? 0) + (pr.deletions ?? 0)).toLocaleString()}
