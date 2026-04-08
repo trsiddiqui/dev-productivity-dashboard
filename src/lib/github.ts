@@ -3,6 +3,8 @@ import type { CommitTimeseriesItem, GithubUser, PR } from './types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 
 export const DEV_BASE_BRANCH = 'dev';
+export const WEBSITE_STAGING_REPO = 'aligncommerce/website';
+export const WEBSITE_STAGING_BRANCH = 'staging';
 const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 
 type GithubPRDateField = 'created' | 'merged';
@@ -36,12 +38,45 @@ interface GHPullRequestNode {
   lastCommits: { nodes: GHCommitNode[] };
   repository: GHRepo;
   reviews: GHReviewConnection;
+  reviewThreads?: {
+    nodes?: Array<{ comments?: { totalCount?: number } | null }>;
+  } | null;
   timelineItems: GHTimeline;
 }
 interface GHSearchEdge { node: GHPullRequestNode }
 interface GHSearchPageInfo { hasNextPage: boolean; endCursor: string | null }
 interface GHSearchData { search: { pageInfo: GHSearchPageInfo; edges: GHSearchEdge[] } }
 interface GHResponse { data: GHSearchData; errors?: unknown }
+interface GHActor { login?: string | null }
+interface GHReviewContributionNode {
+  occurredAt: string;
+  pullRequest?: {
+    number: number;
+    url: string;
+    title: string;
+    baseRefName: string;
+    repository: GHRepo;
+    author?: GHActor | null;
+  } | null;
+  pullRequestReview?: {
+    state: GHReviewNode['state'];
+    comments?: { totalCount?: number } | null;
+  } | null;
+}
+interface GHReviewContributionPageInfo { hasNextPage: boolean; endCursor: string | null }
+interface GHReviewContributionResponse {
+  data?: {
+    user?: {
+      contributionsCollection?: {
+        pullRequestReviewContributions?: {
+          pageInfo: GHReviewContributionPageInfo;
+          nodes: GHReviewContributionNode[];
+        } | null;
+      } | null;
+    } | null;
+  };
+  errors?: unknown;
+}
 
 export async function getGithubPRsWithStats(params: {
   login: string;
@@ -64,10 +99,11 @@ export async function getGithubPRsWithStats(params: {
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
 
   const scope = buildScopeFilter(repo);
+  const baseSearchFilter = buildBaseBranchSearchFilter(repo, baseBranch);
   const q = [
     'is:pr',
     `author:${login}`,
-    `base:${baseBranch}`,
+    baseSearchFilter,
     scope,
     dateField === 'merged' ? 'is:merged' : mergedOnly ? 'is:merged' : '',
     dateField === 'merged' ? `merged:${from}..${to}` : `created:${from}..${to}`,
@@ -118,6 +154,12 @@ export async function getGithubPRsWithStats(params: {
                 nodes { submittedAt state }
               }
 
+              reviewThreads(first: 100) {
+                nodes {
+                  comments { totalCount }
+                }
+              }
+
               timelineItems(itemTypes: READY_FOR_REVIEW_EVENT, first: 10) {
                 nodes {
                   __typename
@@ -154,7 +196,7 @@ export async function getGithubPRsWithStats(params: {
 
     for (const edge of data.edges) {
       const n = edge.node;
-      if (!isMatchingBaseBranch(n.baseRefName, baseBranch)) continue;
+      if (!isMatchingTrackedBaseBranch(n.repository, n.baseRefName, baseBranch)) continue;
       if (mergedOnly && !n.mergedAt) continue;
 
       const firstCommitNode = n.firstCommits.nodes[0]?.commit;
@@ -166,6 +208,10 @@ export async function getGithubPRsWithStats(params: {
       let approvalCount = 0;
       let changesRequestedCount = 0;
       let commentReviewCount = 0;
+      const reviewThreadCommentCount = n.reviewThreads?.nodes?.reduce(
+        (sum, thread) => sum + (thread.comments?.totalCount ?? 0),
+        0,
+      ) ?? 0;
       for (const r of n.reviews.nodes) {
         if (r.submittedAt) {
           if (!firstReviewAt || r.submittedAt < firstReviewAt) firstReviewAt = r.submittedAt;
@@ -207,6 +253,7 @@ export async function getGithubPRsWithStats(params: {
         approvalCount,
         changesRequestedCount,
         commentReviewCount,
+        reviewThreadCommentCount,
         repository: { owner: n.repository.owner.login, name: n.repository.name },
         firstReviewAt,
         readyForReviewAt,
@@ -222,6 +269,117 @@ export async function getGithubPRsWithStats(params: {
     const right = dateField === 'merged' ? (b.mergedAt ?? b.createdAt) : b.createdAt;
     return left.localeCompare(right);
   });
+}
+
+export async function getGithubReviewActivity(params: {
+  login: string;
+  from: string;
+  to: string;
+  baseBranch?: string;
+  repo?: string;
+}): Promise<{
+  totalReviews: number;
+  approvals: number;
+  changesRequested: number;
+  comments: number;
+  reviewedPRs: number;
+  reviewComments: number;
+}> {
+  const { login, from, to, baseBranch = DEV_BASE_BRANCH, repo } = params;
+  if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
+
+  const query = `
+    query($login: String!, $from: DateTime!, $to: DateTime!, $first: Int!, $after: String) {
+      user(login: $login) {
+        contributionsCollection(from: $from, to: $to) {
+          pullRequestReviewContributions(first: $first, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              occurredAt
+              pullRequest {
+                number
+                url
+                title
+                baseRefName
+                repository { name owner { login } }
+                author { login }
+              }
+              pullRequestReview {
+                state
+                comments(first: 1) { totalCount }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${cfg.githubToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  let totalReviews = 0;
+  let approvals = 0;
+  let changesRequested = 0;
+  let comments = 0;
+  let reviewComments = 0;
+  const reviewedPRs = new Set<string>();
+  let after: string | null = null;
+  let hasNext = true;
+
+  while (hasNext) {
+    const resp = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        query,
+        variables: {
+          login,
+          from: `${from}T00:00:00Z`,
+          to: `${to}T23:59:59Z`,
+          first: 100,
+          after,
+        },
+      }),
+    });
+    const json = await resp.json() as GHReviewContributionResponse;
+    if (!resp.ok || json.errors) {
+      throw new Error(`GitHub GraphQL error: ${JSON.stringify(json.errors ?? json)}`);
+    }
+
+    const connection = json.data?.user?.contributionsCollection?.pullRequestReviewContributions;
+    const nodes = connection?.nodes ?? [];
+    for (const node of nodes) {
+      const pr = node.pullRequest;
+      const review = node.pullRequestReview;
+      if (!pr || !review) continue;
+      if (!isMatchingTrackedBaseBranch(pr.repository, pr.baseRefName, baseBranch)) continue;
+      if (!matchesRepositoryScope(pr.repository, repo)) continue;
+      if ((pr.author?.login ?? '').trim().toLowerCase() === login.trim().toLowerCase()) continue;
+
+      totalReviews += 1;
+      reviewedPRs.add(pr.url);
+      reviewComments += review.comments?.totalCount ?? 0;
+
+      if (review.state === 'APPROVED') approvals += 1;
+      if (review.state === 'CHANGES_REQUESTED') changesRequested += 1;
+      if (review.state === 'COMMENTED') comments += 1;
+    }
+
+    hasNext = connection?.pageInfo.hasNextPage ?? false;
+    after = connection?.pageInfo.endCursor ?? null;
+  }
+
+  return {
+    totalReviews,
+    approvals,
+    changesRequested,
+    comments,
+    reviewedPRs: reviewedPRs.size,
+    reviewComments,
+  };
 }
 
 export async function getGithubCommitsByDay(params: {
@@ -366,8 +524,48 @@ function buildScopeFilter(repo?: string): string {
   return parts.join(' ');
 }
 
-function isMatchingBaseBranch(actual?: string | null, expected = DEV_BASE_BRANCH): boolean {
-  return (actual ?? '').trim().toLowerCase() === expected.trim().toLowerCase();
+function buildBaseBranchSearchFilter(repo: string | undefined, defaultBaseBranch: string): string {
+  const scopedRepo = normalizeRepoName(repo);
+  if (!scopedRepo) {
+    return '';
+  }
+  return `base:${getTrackedBaseBranchForRepo(scopedRepo, defaultBaseBranch)}`;
+}
+
+function matchesRepositoryScope(repository: GHRepo, repo?: string): boolean {
+  const fullName = `${repository.owner.login}/${repository.name}`.toLowerCase();
+  if (repo) {
+    const scopedRepo = repo.includes('/') ? repo : (cfg.githubOrg ? `${cfg.githubOrg}/${repo}` : repo);
+    return fullName === scopedRepo.toLowerCase();
+  }
+  if (cfg.githubRepos.length > 0) {
+    return cfg.githubRepos.some((candidate) => candidate.toLowerCase() === fullName);
+  }
+  if (cfg.githubOrg) {
+    return repository.owner.login.toLowerCase() === cfg.githubOrg.toLowerCase();
+  }
+  return true;
+}
+
+function getTrackedBaseBranchForRepo(repoFullName: string, defaultBaseBranch = DEV_BASE_BRANCH): string {
+  return repoFullName.toLowerCase() === WEBSITE_STAGING_REPO
+    ? WEBSITE_STAGING_BRANCH
+    : defaultBaseBranch;
+}
+
+function isMatchingTrackedBaseBranch(
+  repository: GHRepo,
+  actual?: string | null,
+  defaultBaseBranch = DEV_BASE_BRANCH,
+): boolean {
+  const fullName = `${repository.owner.login}/${repository.name}`.toLowerCase();
+  return (actual ?? '').trim().toLowerCase() === getTrackedBaseBranchForRepo(fullName, defaultBaseBranch).toLowerCase();
+}
+
+function normalizeRepoName(repo?: string): string | null {
+  if (!repo) return null;
+  const scopedRepo = repo.includes('/') ? repo : (cfg.githubOrg ? `${cfg.githubOrg}/${repo}` : repo);
+  return scopedRepo.trim().toLowerCase() || null;
 }
 
 
@@ -493,7 +691,7 @@ export async function getGithubPRStatsByUrls(
           const pr = json?.data?.repository?.pullRequest;
           if (
             pr &&
-            isMatchingBaseBranch(pr.baseRefName, baseBranch) &&
+            isMatchingTrackedBaseBranch({ owner: { login: ref.owner }, name: ref.repo }, pr.baseRefName, baseBranch) &&
             typeof pr.additions === 'number' &&
             typeof pr.deletions === 'number'
           ) {

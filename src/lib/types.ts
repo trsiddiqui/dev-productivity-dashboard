@@ -26,6 +26,7 @@ export interface PR {
   approvalCount?: number;
   changesRequestedCount?: number;
   commentReviewCount?: number;
+  reviewThreadCommentCount?: number;
   repository: { owner: string; name: string };
 
 
@@ -156,14 +157,19 @@ export interface ContributionWipItem {
   activeIssues: number;
 }
 
-export interface ContributionReviewSummary {
+export interface ContributionReviewBucket {
   totalReviews: number;
   approvals: number;
   changesRequested: number;
   comments: number;
   reviewedPRs: number;
-  reviewCoveragePct: number;
+  reviewComments: number;
   avgReviewsPerPR: number;
+}
+
+export interface ContributionReviewSummary {
+  given: ContributionReviewBucket;
+  received: ContributionReviewBucket;
 }
 
 export interface ContributionPRCycleSummary {
@@ -172,6 +178,13 @@ export interface ContributionPRCycleSummary {
   medianCodingHours: number | null;
   medianLastCommitToReviewHours: number | null;
   medianReviewToMergeHours: number | null;
+}
+
+export interface ContributionJiraPRTimingSummary {
+  codingSampleSize: number;
+  avgCodingHours: number | null;
+  cycleSampleSize: number;
+  avgCycleTimeHours: number | null;
 }
 
 export interface ContributionIssueCycleSummary {
@@ -213,6 +226,7 @@ export interface ContributionResponse {
   linkedTickets: ContributionLinkedTicket[];
   reviews: ContributionReviewSummary;
   prCycle: ContributionPRCycleSummary;
+  jiraPrTiming: ContributionJiraPRTimingSummary;
   issueCycle: ContributionIssueCycleSummary;
   wip: ContributionWipItem[];
   warnings?: string[];

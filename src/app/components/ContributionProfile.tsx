@@ -10,7 +10,6 @@ import type {
 import { JSX, useEffect, useMemo, useState } from 'react';
 import { ContributionMetricBars, type ContributionMetricBarItem } from './ContributionMetricBars';
 import { ContributionTrendChart } from './ContributionTrendChart';
-import { ContributionWipChart } from './ContributionWipChart';
 import { RepoContributionChart } from './RepoContributionChart';
 
 interface Props {
@@ -18,6 +17,11 @@ interface Props {
   title?: string;
   gapMode: ContributionGapMode;
   maskIdentity?: boolean;
+}
+
+export interface ContributionProfileSection {
+  id: string;
+  node: JSX.Element | null;
 }
 
 const sourceLabel: Record<ContributionIssueLinkSource, string> = {
@@ -209,8 +213,13 @@ function buildSignalNotes(data: ContributionResponse, gapMode: ContributionGapMo
   if (kpis.burstiestDayShare >= 45) {
     notes.push(`${kpis.burstiestDayShare}% of all LOC landed in one day, which usually means work is batching up.`);
   }
-  if (reviews.reviewCoveragePct < 70 && data.prs.length > 0) {
-    notes.push(`Only ${reviews.reviewCoveragePct}% of dev PRs show recorded review activity, which may mean reviews are being skipped or not landing quickly.`);
+  if (reviews.given.reviewedPRs === 0) {
+    notes.push('No reviews were recorded on other developers\' PRs in this window.');
+  } else if (reviews.given.reviewComments === 0) {
+    notes.push(`Reviewed ${reviews.given.reviewedPRs} PRs in this window without leaving threaded review comments.`);
+  }
+  if (reviews.received.reviewedPRs === 0 && data.prs.length > 0) {
+    notes.push('None of this developer\'s tracked-base PRs show recorded review activity in this window.');
   }
   if ((prCycle.medianLastCommitToReviewHours ?? 0) >= 24) {
     notes.push(`Median wait from last commit to first review is ${formatHours(prCycle.medianLastCommitToReviewHours)}, which suggests review pickup may be the bottleneck.`);
@@ -219,7 +228,7 @@ function buildSignalNotes(data: ContributionResponse, gapMode: ContributionGapMo
     notes.push(`Linked Jira issues take a median of ${formatHours(issueCycle.medianCycleTimeHours)} from in progress to done, so issue flow may be dragging.`);
   }
   if (peakWip >= 4 && kpis.totalPRs <= 2) {
-    notes.push(`WIP peaks at ${peakWip} items while only ${kpis.totalPRs} dev PRs landed, which can be a sign of too much work staying open.`);
+    notes.push(`WIP peaks at ${peakWip} items while only ${kpis.totalPRs} tracked-base PRs landed, which can be a sign of too much work staying open.`);
   }
   if (longestNoTicketGapDays >= 2) {
     notes.push(`${daysWithoutActiveTicket} ${gapUnitLabelPlural(gapMode)} in this window have no active Jira subtask, including a longest gap of ${longestNoTicketGapDays} ${gapUnitLabelPlural(gapMode)}.`);
@@ -249,7 +258,61 @@ function ReviewStatCard({ label, value }: { label: string; value: string }): JSX
   );
 }
 
-export function ContributionProfile({ data, title, gapMode, maskIdentity = false }: Props): JSX.Element {
+function ReviewSummaryGroup(props: {
+  title: string;
+  subtitle: string;
+  emphasisLabel: string;
+  emphasisValue: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+  summary: ContributionResponse['reviews']['given'];
+  tone: 'blue' | 'amber';
+}): JSX.Element {
+  const accent = props.tone === 'blue'
+    ? {
+      bg: 'rgba(96,165,250,0.12)',
+      border: 'rgba(96,165,250,0.20)',
+      text: '#dbeafe',
+      muted: '#bfdbfe',
+    }
+    : {
+      bg: 'rgba(245,158,11,0.12)',
+      border: 'rgba(245,158,11,0.20)',
+      text: '#ffedd5',
+      muted: '#fde68a',
+    };
+
+  return (
+    <div style={{ background: accent.bg, border: `1px solid ${accent.border}`, borderRadius: 14, padding: 14, display: 'grid', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: accent.text }}>{props.title}</div>
+        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>{props.subtitle}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.18)' }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent.muted, fontWeight: 700 }}>
+            {props.emphasisLabel}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 28, fontWeight: 800 }}>{props.emphasisValue}</div>
+        </div>
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.18)' }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent.muted, fontWeight: 700 }}>
+            {props.secondaryLabel}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 28, fontWeight: 800 }}>{props.secondaryValue}</div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+        <ReviewStatCard label="Total Reviews" value={metricValue(props.summary.totalReviews)} />
+        <ReviewStatCard label="Avg Reviews / PR" value={metricValue(props.summary.avgReviewsPerPR)} />
+        <ReviewStatCard label="Approvals" value={metricValue(props.summary.approvals)} />
+        <ReviewStatCard label="Change Requests" value={metricValue(props.summary.changesRequested)} />
+      </div>
+    </div>
+  );
+}
+
+export function useContributionProfileSections({ data, title, gapMode, maskIdentity = false }: Props): ContributionProfileSection[] {
   const [selectedLinkSource, setSelectedLinkSource] = useState<ContributionIssueLinkSource | null>(null);
 
   const availableLinkSources = useMemo(
@@ -361,6 +424,21 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
     { label: 'Review -> merge', value: data.prCycle.medianReviewToMergeHours ?? 0, fill: '#ef4444' },
   ];
 
+  const jiraPrTimingItems: ContributionMetricBarItem[] = [
+    {
+      label: 'Time Spent in Coding',
+      subtitle: data.jiraPrTiming.codingSampleSize > 0 ? `${data.jiraPrTiming.codingSampleSize} PRs` : undefined,
+      value: data.jiraPrTiming.avgCodingHours ?? 0,
+      fill: '#38bdf8',
+    },
+    {
+      label: 'Cycle Time',
+      subtitle: data.jiraPrTiming.cycleSampleSize > 0 ? `${data.jiraPrTiming.cycleSampleSize} tickets` : undefined,
+      value: data.jiraPrTiming.avgCycleTimeHours ?? 0,
+      fill: '#34d399',
+    },
+  ];
+
   const issueCycleItems: ContributionMetricBarItem[] = slowestIssues.map(({ issue, cycleHours }, index) => ({
     label: maskIdentity ? maskedEntityLabel('Ticket', index) : issue.key,
     subtitle: [
@@ -392,13 +470,15 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
     setSelectedLinkSource((current) => current === source ? null : source);
   }
 
-  return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
+  return [
+    {
+      id: 'summary',
+      node: (
+        <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
         <div style={{ marginBottom: 12 }}>
           <h2 style={{ fontSize: 22, fontWeight: 700 }}>{title ?? `${data.login} Contribution Snapshot`}</h2>
           <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
-            Measures code that first lands in <code>dev</code>, ignoring later promotions into QA and production.
+            Measures code that first lands in the tracked base branch, which is usually <code>dev</code> and <code>staging</code> for <code>aligncommerce/website</code>, ignoring later promotions into QA and production.
           </p>
           <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
             <code>Touched Ticket SP</code> sums unique Jira story points where a dev PR was opened or a commit referenced the ticket during this window, using Jira dev-status links where available and rolling linked subtasks up to their parent ticket points.
@@ -419,8 +499,12 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           ))}
         </div>
       </div>
-
-      <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
+      ),
+    },
+    {
+      id: 'patterns',
+      node: (
+        <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Patterns to Watch</h3>
         <div style={{ display: 'grid', gap: 8 }}>
           {notes.map((note) => (
@@ -430,33 +514,63 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           ))}
         </div>
       </div>
-
-      <ContributionTrendChart
-        items={data.daily}
-        title="Contribution Pattern Signal"
-        subtitle="Long flat stretches usually mean low output or blockers. Tall one-day spikes often mean the work is landing in batches instead of steadily."
-      />
-
-      <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
+      ),
+    },
+    {
+      id: 'contribution-pattern',
+      node: (
+        <ContributionTrendChart
+          items={data.daily}
+          title="Contribution Pattern Signal"
+          subtitle="Long flat stretches usually mean low output or blockers. Tall one-day spikes often mean the work is landing in batches instead of steadily."
+        />
+      ),
+    },
+    {
+      id: 'reviews',
+      node: (
+        <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
         <div style={{ marginBottom: 12 }}>
           <h3 style={{ fontSize: 18, fontWeight: 600 }}>PR Reviews and Review Activity</h3>
           <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
-            Low review coverage or long waits for first review usually highlight either review bottlenecks or a lack of reviewer engagement.
+            This view separates reviews given by the selected developer from reviews received on the selected developer&apos;s own tracked-base PRs. Median review wait still measures how long their own PRs waited for first review.
           </p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-          <ReviewStatCard label="Total Reviews" value={metricValue(data.reviews.totalReviews)} />
-          <ReviewStatCard label="Reviewed PRs" value={`${data.reviews.reviewedPRs}/${data.kpis.totalPRs}`} />
-          <ReviewStatCard label="Review Coverage" value={metricValue(data.reviews.reviewCoveragePct, '%')} />
-          <ReviewStatCard label="Avg Reviews / PR" value={metricValue(data.reviews.avgReviewsPerPR)} />
-          <ReviewStatCard label="Approvals" value={metricValue(data.reviews.approvals)} />
-          <ReviewStatCard label="Change Requests" value={metricValue(data.reviews.changesRequested)} />
-          <ReviewStatCard label="Comment Reviews" value={metricValue(data.reviews.comments)} />
-          <ReviewStatCard label="Median Review Wait" value={formatHours(data.prCycle.medianLastCommitToReviewHours)} />
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+            <ReviewSummaryGroup
+              title="Reviews Given"
+              subtitle="Review activity this developer authored on other people&apos;s PRs."
+              emphasisLabel="PRs Reviewed"
+              emphasisValue={metricValue(data.reviews.given.reviewedPRs)}
+              secondaryLabel="Comments Left"
+              secondaryValue={metricValue(data.reviews.given.reviewComments)}
+              summary={data.reviews.given}
+              tone="blue"
+            />
+            <ReviewSummaryGroup
+              title="Reviews Received"
+              subtitle="Review activity other people recorded on this developer&apos;s tracked-base PRs."
+              emphasisLabel="Own PRs Reviewed"
+              emphasisValue={metricValue(data.reviews.received.reviewedPRs)}
+              secondaryLabel="Comments Received"
+              secondaryValue={metricValue(data.reviews.received.reviewComments)}
+              summary={data.reviews.received}
+              tone="amber"
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+            <ReviewStatCard label="Comment Reviews Given" value={metricValue(data.reviews.given.comments)} />
+            <ReviewStatCard label="Comment Reviews Received" value={metricValue(data.reviews.received.comments)} />
+            <ReviewStatCard label="Median Review Wait" value={formatHours(data.prCycle.medianLastCommitToReviewHours)} />
+          </div>
         </div>
       </div>
-
-      {data.prCycle.sampleSize > 0 ? (
+      ),
+    },
+    {
+      id: 'pr-cycle',
+      node: data.prCycle.sampleSize > 0 ? (
         <ContributionMetricBars
           title="Exact PR Cycle Time Breakdown"
           subtitle="Large last-commit-to-review time means work is waiting on reviewers. Large review-to-merge time often points to rework or slow approvals."
@@ -466,16 +580,34 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
       ) : (
         <EmptyPanel
           title="Exact PR Cycle Time Breakdown"
-          text="No merged dev PRs in this window have enough commit history to calculate exact PR cycle times."
+          text="No merged tracked-base PRs in this window have enough commit history to calculate exact PR cycle times."
         />
-      )}
-
-      {slowestPRs.length > 0 && (
+      ),
+    },
+    {
+      id: 'jira-to-pr',
+      node: (data.jiraPrTiming.codingSampleSize > 0 || data.jiraPrTiming.cycleSampleSize > 0) ? (
+        <ContributionMetricBars
+          title="Jira to PR Timing Breakdown"
+          subtitle="Average timings based on the Jira ticket linked in the PR title or branch name. If the linked issue is a subtask, the parent ticket's Jira timestamps are used."
+          items={jiraPrTimingItems}
+          valueFormatter={formatHours}
+        />
+      ) : (
+        <EmptyPanel
+          title="Jira to PR Timing Breakdown"
+          text="No linked Jira tickets in this window have enough phase history to calculate average coding and cycle timings."
+        />
+      ),
+    },
+    {
+      id: 'slowest-prs',
+      node: slowestPRs.length > 0 ? (
         <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
           <div style={{ marginBottom: 8 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600 }}>Slowest Dev PR Cycles</h3>
             <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
-              These are the merged dev PRs with the longest span from first commit to merge.
+              These are the merged tracked-base PRs with the longest span from first commit to merge.
             </p>
           </div>
           <div style={{ overflow: 'auto' }}>
@@ -517,16 +649,16 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
             </table>
           </div>
         </div>
-      )}
-
-      <ContributionWipChart items={data.wip} gapMode={gapMode} />
-
-      {data.linkedTickets.length > 0 ? (
+      ) : null,
+    },
+    {
+      id: 'linked-tickets',
+      node: data.linkedTickets.length > 0 ? (
         <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
           <div style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600 }}>Linked Jira Tickets</h3>
             <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
-              Source badges show how each Jira ticket was linked into this dashboard: Jira dev-status PR association, ticket key in dev PR title or branch, or ticket key found in commit messages in the selected window. When the linked item is a subtask, this table rolls it up to the parent Story, Bug, or Task and uses the parent status and story points. Click a badge to narrow this table to one link source.
+              Source badges show how each Jira ticket was linked into this dashboard: Jira dev-status PR association, ticket key in a tracked-base PR title or branch, or ticket key found in commit messages in the selected window. When the linked item is a subtask, this table rolls it up to the parent Story, Bug, or Task and uses the parent status and story points. Click a badge to narrow this table to one link source.
             </p>
           </div>
           {availableLinkSources.length > 0 ? (
@@ -609,9 +741,11 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
             </table>
           </div>
         </div>
-      ) : null}
-
-      {workingTicketRows.length > 0 ? (
+      ) : null,
+    },
+    {
+      id: 'ticket-working-time',
+      node: workingTicketRows.length > 0 ? (
         <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
           <div style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600 }}>Ticket Working Time (In Progress - Merged)</h3>
@@ -676,9 +810,11 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           title="Ticket Working Time (In Progress - Merged)"
           text="No linked Jira tickets in this window have both an In Progress timestamp and a Jira Merged timestamp yet, so active working time cannot be calculated."
         />
-      )}
-
-      {data.issueCycle.completedCount > 0 ? (
+      ),
+    },
+    {
+      id: 'issue-cycle',
+      node: data.issueCycle.completedCount > 0 ? (
         <>
           <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
             <div style={{ marginBottom: 12 }}>
@@ -697,7 +833,7 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           {issueCycleItems.length > 0 ? (
             <ContributionMetricBars
               title="Slowest Linked Issue Cycles"
-              subtitle="Technical details: this uses Jira changelog timestamps, measuring from the first move into In Progress to the first move into Done or Approved. Ticket linkage is tightened with Jira dev-status PR associations, then supplemented with dev PR metadata and commit references when available. Large outliers usually mean QA wait time, blocked work, or rework."
+              subtitle="Technical details: this uses Jira changelog timestamps, measuring from the first move into In Progress to the first move into Done or Approved. Ticket linkage is tightened with Jira dev-status PR associations, then supplemented with tracked-base PR metadata and commit references when available. Large outliers usually mean QA wait time, blocked work, or rework."
               items={issueCycleItems}
               valueFormatter={formatHours}
             />
@@ -708,11 +844,16 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           title="Issue Cycle Time"
           text="No linked Jira issues in this window have both In Progress and completion timestamps, so issue cycle time cannot be calculated yet."
         />
-      )}
-
-      <RepoContributionChart items={repoItems} />
-
-      <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
+      ),
+    },
+    {
+      id: 'repo-contribution',
+      node: <RepoContributionChart items={repoItems} />,
+    },
+    {
+      id: 'largest-prs',
+      node: (
+        <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
         <div style={{ marginBottom: 8 }}>
           <h3 style={{ fontSize: 18, fontWeight: 600 }}>Largest Dev PRs in the Window</h3>
           <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
@@ -720,7 +861,7 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           </p>
         </div>
         {topPRs.length === 0 ? (
-          <div style={{ fontSize: 14, color: 'var(--panel-muted)' }}>No matching dev PRs landed in this window.</div>
+          <div style={{ fontSize: 14, color: 'var(--panel-muted)' }}>No matching tracked-base PRs landed in this window.</div>
         ) : (
           <div style={{ overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
@@ -767,6 +908,17 @@ export function ContributionProfile({ data, title, gapMode, maskIdentity = false
           </div>
         )}
       </div>
+      ),
+    },
+  ];
+}
+
+export function ContributionProfile(props: Props): JSX.Element {
+  const sections = useContributionProfileSections(props);
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {sections.map((section) => section.node ? <div key={section.id}>{section.node}</div> : null)}
     </div>
   );
 }

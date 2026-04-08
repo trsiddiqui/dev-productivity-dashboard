@@ -2,10 +2,12 @@ import { eachDayOfInterval, formatISO } from 'date-fns';
 import type {
   CommitTimeseriesItem,
   ContributionDailyItem,
+  ContributionJiraPRTimingSummary,
   ContributionIssueCycleSummary,
   ContributionKpis,
   ContributionPRCycleSummary,
   ContributionRepoItem,
+  ContributionReviewBucket,
   ContributionReviewSummary,
   ContributionWipItem,
   JiraIssue,
@@ -44,6 +46,15 @@ function diffHours(start?: string | null, end?: string | null): number | null {
   const endMs = new Date(end).getTime();
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
   return Math.max(0, (endMs - startMs) / 36e5);
+}
+
+function extractOrderedJiraKeysFromPR(pr: PR): string[] {
+  const found = new Set<string>();
+  for (const text of [pr.title, pr.headRefName].filter(Boolean) as string[]) {
+    const matches = text.toUpperCase().match(JIRA_KEY_RE) ?? [];
+    for (const match of matches) found.add(match);
+  }
+  return Array.from(found);
 }
 
 export function extractJiraKeysFromPRs(prs: PR[]): string[] {
@@ -194,22 +205,35 @@ export function computeContributionKpis(params: {
   };
 }
 
-export function computeContributionReviewSummary(prs: PR[]): ContributionReviewSummary {
-  const totalReviews = prs.reduce((sum, pr) => sum + (pr.reviewCount ?? 0), 0);
-  const approvals = prs.reduce((sum, pr) => sum + (pr.approvalCount ?? 0), 0);
-  const changesRequested = prs.reduce((sum, pr) => sum + (pr.changesRequestedCount ?? 0), 0);
-  const comments = prs.reduce((sum, pr) => sum + (pr.commentReviewCount ?? 0), 0);
-  const reviewedPRs = prs.filter((pr) => (pr.reviewCount ?? 0) > 0).length;
-  const reviewCoveragePct = prs.length > 0 ? (reviewedPRs / prs.length) * 100 : 0;
+export function computeContributionReviewBucket(activity: Omit<ContributionReviewBucket, 'avgReviewsPerPR'>): ContributionReviewBucket {
+  return {
+    ...activity,
+    avgReviewsPerPR: activity.reviewedPRs > 0 ? round(activity.totalReviews / activity.reviewedPRs) : 0,
+  };
+}
+
+export function computeContributionReviewSummary(params: {
+  given: Omit<ContributionReviewBucket, 'avgReviewsPerPR'>;
+  received: PR[];
+}): ContributionReviewSummary {
+  const { given, received } = params;
+  const receivedTotalReviews = received.reduce((sum, pr) => sum + (pr.reviewCount ?? 0), 0);
+  const receivedApprovals = received.reduce((sum, pr) => sum + (pr.approvalCount ?? 0), 0);
+  const receivedChangesRequested = received.reduce((sum, pr) => sum + (pr.changesRequestedCount ?? 0), 0);
+  const receivedCommentReviews = received.reduce((sum, pr) => sum + (pr.commentReviewCount ?? 0), 0);
+  const receivedReviewedPRs = received.filter((pr) => (pr.reviewCount ?? 0) > 0).length;
+  const receivedReviewComments = received.reduce((sum, pr) => sum + (pr.reviewThreadCommentCount ?? 0), 0);
 
   return {
-    totalReviews,
-    approvals,
-    changesRequested,
-    comments,
-    reviewedPRs,
-    reviewCoveragePct: round(reviewCoveragePct),
-    avgReviewsPerPR: prs.length > 0 ? round(totalReviews / prs.length) : 0,
+    given: computeContributionReviewBucket(given),
+    received: computeContributionReviewBucket({
+      totalReviews: receivedTotalReviews,
+      approvals: receivedApprovals,
+      changesRequested: receivedChangesRequested,
+      comments: receivedCommentReviews,
+      reviewedPRs: receivedReviewedPRs,
+      reviewComments: receivedReviewComments,
+    }),
   };
 }
 
@@ -233,6 +257,44 @@ export function computeContributionPRCycleSummary(prs: PR[]): ContributionPRCycl
     medianCodingHours: coding.length > 0 ? round(median(coding)) : null,
     medianLastCommitToReviewHours: lastCommitToReview.length > 0 ? round(median(lastCommitToReview)) : null,
     medianReviewToMergeHours: reviewToMerge.length > 0 ? round(median(reviewToMerge)) : null,
+  };
+}
+
+export function computeContributionJiraPRTimingSummary(params: {
+  prs: PR[];
+  issues: JiraIssue[];
+}): ContributionJiraPRTimingSummary {
+  const { prs, issues } = params;
+  const issueByKey = new Map(issues.map((issue) => [issue.key.toUpperCase(), issue]));
+  const codingHours: number[] = [];
+  const cycleHours: number[] = [];
+
+  for (const pr of prs) {
+    const jiraKeys = extractOrderedJiraKeysFromPR(pr);
+    if (jiraKeys.length === 0) continue;
+
+    let resolvedIssue: JiraIssue | null = null;
+    for (const key of jiraKeys) {
+      const candidate = issueByKey.get(key);
+      if (candidate) {
+        resolvedIssue = candidate;
+        break;
+      }
+    }
+    if (!resolvedIssue) continue;
+
+    const coding = diffHours(resolvedIssue.inProgressAt, pr.createdAt);
+    if (coding !== null) codingHours.push(coding);
+
+    const cycle = diffHours(resolvedIssue.inProgressAt, resolvedIssue.reviewAt);
+    if (cycle !== null) cycleHours.push(cycle);
+  }
+
+  return {
+    codingSampleSize: codingHours.length,
+    avgCodingHours: average(codingHours) === null ? null : round(average(codingHours)!),
+    cycleSampleSize: cycleHours.length,
+    avgCycleTimeHours: average(cycleHours) === null ? null : round(average(cycleHours)!),
   };
 }
 

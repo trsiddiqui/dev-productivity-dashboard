@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import "react-day-picker/style.css";
 import "./globals.css";
 import ThemeSelect from "./components/ThemeSelect";
 import LogoutButton from "./components/LogoutButton";
