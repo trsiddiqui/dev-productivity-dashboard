@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DEV_BASE_BRANCH, getGithubCommitJiraKeys, getGithubPRsWithStats } from '@/lib/github';
+import {
+  DEV_BASE_BRANCH,
+  getGithubCommitJiraKeys,
+  getGithubPRsWithStats,
+  getGithubReviewActivity,
+} from '@/lib/github';
 import {
   aggregateContributionDaily,
   aggregateContributionWip,
+  computeContributionJiraPRTimingSummary,
   computeContributionKpis,
   computeContributionIssueCycleSummary,
   computeContributionPRCycleSummary,
@@ -90,6 +96,14 @@ export async function GET(req: Request) {
 
     let prsOpenedInWindow = [] as typeof prs;
     let commitIssueKeys: string[] = [];
+    let reviewActivity = {
+      totalReviews: 0,
+      approvals: 0,
+      changesRequested: 0,
+      comments: 0,
+      reviewedPRs: 0,
+      reviewComments: 0,
+    };
 
     await Promise.all([
       getGithubPRsWithStats({
@@ -106,6 +120,19 @@ export async function GET(req: Request) {
         })
         .catch((err) => {
           warnings.push(`Story point PR-open metric unavailable: ${err instanceof Error ? err.message : String(err)}`);
+        }),
+      getGithubReviewActivity({
+        login,
+        from,
+        to,
+        repo,
+        baseBranch: DEV_BASE_BRANCH,
+      })
+        .then((summary) => {
+          reviewActivity = summary;
+        })
+        .catch((err) => {
+          warnings.push(`GitHub review activity unavailable: ${err instanceof Error ? err.message : String(err)}`);
         }),
       getGithubCommitJiraKeys({ login, from, to, repo })
         .then((keys) => {
@@ -128,6 +155,7 @@ export async function GET(req: Request) {
     const currentPrRefs = new Set(prs.map((pr) => normalizePullUrl(pr.url)).filter((ref): ref is string => !!ref));
     const openedPrRefs = new Set(prsOpenedInWindow.map((pr) => normalizePullUrl(pr.url)).filter((ref): ref is string => !!ref));
     let issues: JiraIssue[] = [];
+    let jiraTimingIssues: JiraIssue[] = [];
     let linkedTickets: ContributionLinkedTicket[] = [];
     let touchedTicketStoryPoints = 0;
 
@@ -224,8 +252,13 @@ export async function GET(req: Request) {
           touchedDisplayKeys.has(ticket.key) ? sum + (ticket.storyPoints ?? 0) : sum
         ), 0);
 
+        const phaseTimeKeys = Array.from(new Set([
+          ...issues.map((issue) => issue.key),
+          ...parentIssues.map((issue) => issue.key),
+        ])).sort((left, right) => left.localeCompare(right));
+
         const phaseTimes = await getIssuePhaseTimes(
-          issues.map((issue) => issue.key),
+          phaseTimeKeys,
           {
             todo: ['To Do', 'Open', 'Backlog', 'Selected for Development'],
             inProgress: ['In Progress', 'In Development', 'In-Progress', 'Doing', 'Selected for Development'],
@@ -244,9 +277,43 @@ export async function GET(req: Request) {
           issue.reviewAt = phase.review;
           issue.completeAt = phase.complete;
         }
+
+        for (const issue of parentIssues) {
+          const phase = phaseTimes[issue.key];
+          if (!phase) continue;
+          issue.todoAt = phase.todo;
+          issue.inProgressAt = phase.inProgress;
+          issue.mergedAt = phase.merged;
+          issue.reviewAt = phase.review;
+          issue.completeAt = phase.complete;
+        }
+
+        const effectiveIssueByKey = new Map<string, JiraIssue>();
+        for (const issue of issues) {
+          if (issue.isSubtask && issue.parentKey && parentByKey.has(issue.parentKey)) {
+            const parentIssue = parentByKey.get(issue.parentKey)!;
+            effectiveIssueByKey.set(issue.key, {
+              ...parentIssue,
+              key: issue.key,
+              url: issue.url,
+              parentKey: issue.parentKey,
+              isSubtask: issue.isSubtask,
+            });
+          } else {
+            effectiveIssueByKey.set(issue.key, issue);
+          }
+        }
+
+        for (const parentIssue of parentIssues) {
+          effectiveIssueByKey.set(parentIssue.key, parentIssue);
+        }
+        jiraTimingIssues = Array.from(new Map(
+          Array.from(effectiveIssueByKey.values()).map((issue) => [issue.key, issue]),
+        ).values()).sort((left, right) => left.key.localeCompare(right.key));
       } catch (err) {
         warnings.push(`Jira issue metrics unavailable: ${err instanceof Error ? err.message : String(err)}`);
         issues = [];
+        jiraTimingIssues = [];
       }
     }
 
@@ -264,8 +331,9 @@ export async function GET(req: Request) {
       prs,
       issues,
       linkedTickets,
-      reviews: computeContributionReviewSummary(prs),
+      reviews: computeContributionReviewSummary({ given: reviewActivity, received: prs }),
       prCycle: computeContributionPRCycleSummary(prs),
+      jiraPrTiming: computeContributionJiraPRTimingSummary({ prs, issues: jiraTimingIssues }),
       issueCycle: computeContributionIssueCycleSummary(issues),
       wip: aggregateContributionWip({ from, to, prs, issues }),
       warnings: warnings.length > 0 ? warnings : undefined,

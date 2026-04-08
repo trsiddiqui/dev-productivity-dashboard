@@ -131,10 +131,15 @@ export function SearchableSelect({
       <input
         id={`searchable-${id}`}
         type="text"
+        name={`searchable-${id}`}
         role="combobox"
         aria-expanded={open}
         aria-controls={`list-${id}`}
         aria-autocomplete="list"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
         disabled={disabled}
         value={open ? inputValue : closedValue}
         placeholder={placeholder}

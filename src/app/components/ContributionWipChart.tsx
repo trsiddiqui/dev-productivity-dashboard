@@ -61,7 +61,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
     }}>
       <div style={{ fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{weekday ?? '-'}</div>
-      <div style={{ fontSize: 13 }}>Open dev PRs: {openPRs}</div>
+      <div style={{ fontSize: 13 }}>Open tracked-base PRs: {openPRs}</div>
       <div style={{ fontSize: 13 }}>Linked Jira subtasks in progress: {activeIssues}</div>
     </div>
   );
@@ -128,7 +128,7 @@ export function ContributionWipChart({ items, gapMode }: Props): JSX.Element {
                 <span style={{ color: entry.color ?? 'var(--panel-fg)' }}>{value}</span>
               )}
             />
-            <Line type="monotone" dataKey="openPRs" name="Open dev PRs" stroke="#60a5fa" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="openPRs" name="Open tracked-base PRs" stroke="#60a5fa" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="activeIssues" name="Linked Jira subtasks in progress" stroke="#f59e0b" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>

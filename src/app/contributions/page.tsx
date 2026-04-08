@@ -4,8 +4,9 @@ import type { CSSProperties, JSX } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import type { ContributionGapMode, ContributionResponse, GithubUser, UsersResponse } from '@/lib/types';
+import { DateRangePicker } from '../components/DateRangePicker';
 import { SearchableSelect, type Option } from '../components/SearchableSelect';
-import { ContributionProfile } from '../components/ContributionProfile';
+import { useContributionProfileSections } from '../components/ContributionProfile';
 import {
   ContributionSignalsChart,
   type ContributionSignalDatum,
@@ -45,11 +46,21 @@ function rangeSummary(from: string, to: string): string {
 }
 
 function columnLabel(column: ColumnKey): string {
-  return column === 'left' ? 'Left side' : 'Right side';
+  return column === 'left' ? 'Primary profile' : 'Comparison profile';
 }
 
 function maskedDeveloperLabel(column: ColumnKey): string {
-  return column === 'left' ? 'Developer A' : 'Developer B';
+  return column === 'left' ? 'Primary developer' : 'Comparison developer';
+}
+
+function comparisonWindowLabel(column: ColumnKey): string {
+  return column === 'left' ? 'Primary window' : 'Comparison window';
+}
+
+function selectionPanelLabel(column: ColumnKey, comparisonMode: ComparisonMode): string {
+  return comparisonMode === 'date'
+    ? comparisonWindowLabel(column)
+    : columnLabel(column);
 }
 
 function buildProfileTitle(params: {
@@ -71,10 +82,80 @@ function buildProfileTitle(params: {
   const developer = hideDeveloperName ? maskedDeveloperLabel(column) : data.login;
 
   if (comparisonMode === 'date') {
-    return `${column === 'left' ? 'Range A' : 'Range B'} | ${developer} | ${rangeSummary(from, to)}`;
+    return `${comparisonWindowLabel(column)} | ${developer} | ${rangeSummary(from, to)}`;
   }
 
-  return `${developer} | ${rangeSummary(from, to)}`;
+  return `${columnLabel(column)} | ${developer} | ${rangeSummary(from, to)}`;
+}
+
+function AlignedContributionProfiles(props: {
+  primaryData: ContributionResponse;
+  secondaryData: ContributionResponse;
+  comparisonMode: ComparisonMode;
+  gapMode: ContributionGapMode;
+  leftHideDeveloperName: boolean;
+  rightHideDeveloperName: boolean;
+  leftMaskIdentity: boolean;
+  rightMaskIdentity: boolean;
+}): JSX.Element {
+  const {
+    primaryData,
+    secondaryData,
+    comparisonMode,
+    gapMode,
+    leftHideDeveloperName,
+    rightHideDeveloperName,
+    leftMaskIdentity,
+    rightMaskIdentity,
+  } = props;
+
+  const primarySections = useContributionProfileSections({
+    data: primaryData,
+    title: buildProfileTitle({
+      column: 'left',
+      data: primaryData,
+      from: primaryData.from,
+      to: primaryData.to,
+      comparisonMode,
+      hideDeveloperName: leftHideDeveloperName,
+    }),
+    gapMode,
+    maskIdentity: leftMaskIdentity,
+  });
+  const secondarySections = useContributionProfileSections({
+    data: secondaryData,
+    title: buildProfileTitle({
+      column: 'right',
+      data: secondaryData,
+      from: secondaryData.from,
+      to: secondaryData.to,
+      comparisonMode,
+      hideDeveloperName: rightHideDeveloperName,
+    }),
+    gapMode,
+    maskIdentity: rightMaskIdentity,
+  });
+
+  const sectionIds = Array.from(new Set([
+    ...primarySections.map((section) => section.id),
+    ...secondarySections.map((section) => section.id),
+  ]));
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      {sectionIds.map((id) => {
+        const primarySection = primarySections.find((section) => section.id === id)?.node ?? null;
+        const secondarySection = secondarySections.find((section) => section.id === id)?.node ?? null;
+
+        return (
+          <div key={id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, alignItems: 'start' }}>
+            <div>{primarySection}</div>
+            <div>{secondarySection}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function ContributionsPage(): JSX.Element {
@@ -177,8 +258,8 @@ export default function ContributionsPage(): JSX.Element {
     const secondarySelection = effectiveRightColumn;
 
     const validationError = [
-      validateSelection(primarySelection, 'Left side'),
-      validateSelection(secondarySelection, 'Right side'),
+      validateSelection(primarySelection, 'Primary profile'),
+      validateSelection(secondarySelection, 'Comparison profile'),
     ].find(Boolean);
 
     if (validationError) {
@@ -187,7 +268,7 @@ export default function ContributionsPage(): JSX.Element {
     }
 
     if (comparisonMode === 'developer' && primarySelection.login === secondarySelection.login) {
-      setError('Developer comparison requires two different GitHub users.');
+      setError('Primary and comparison profiles must use different GitHub users in profile comparison mode.');
       return;
     }
 
@@ -212,23 +293,92 @@ export default function ContributionsPage(): JSX.Element {
   const comparisonSignals: ContributionSignalDatum[] = useMemo(() => {
     if (!primaryData || !secondaryData) return [];
     return [
-      { metric: 'Dev PRs', primary: primaryData.kpis.totalPRs, secondary: secondaryData.kpis.totalPRs },
-      { metric: 'LOC changed', primary: primaryData.kpis.totalLocChanged, secondary: secondaryData.kpis.totalLocChanged },
       {
-        metric: 'Touched ticket SP',
+        metric: 'Tracked-base PRs',
+        section: 'Delivery',
+        primary: primaryData.kpis.totalPRs,
+        secondary: secondaryData.kpis.totalPRs,
+        format: 'count',
+      },
+      {
+        metric: 'LOC changed',
+        section: 'Delivery',
+        primary: primaryData.kpis.totalLocChanged,
+        secondary: secondaryData.kpis.totalLocChanged,
+        format: 'loc',
+      },
+      {
+        metric: 'Touched ticket story points',
+        section: 'Delivery',
         primary: primaryData.kpis.touchedTicketStoryPoints,
         secondary: secondaryData.kpis.touchedTicketStoryPoints,
+        format: 'count',
       },
-      { metric: 'Active days', primary: primaryData.kpis.activeDays, secondary: secondaryData.kpis.activeDays },
-      { metric: 'Active day %', primary: primaryData.kpis.activeDayRate, secondary: secondaryData.kpis.activeDayRate },
-      { metric: 'Review coverage %', primary: primaryData.reviews.reviewCoveragePct, secondary: secondaryData.reviews.reviewCoveragePct },
       {
-        metric: 'Issue cycle (h)',
+        metric: 'Active days',
+        section: 'Cadence',
+        primary: primaryData.kpis.activeDays,
+        secondary: secondaryData.kpis.activeDays,
+        format: 'count',
+      },
+      {
+        metric: 'Active day rate',
+        section: 'Cadence',
+        primary: primaryData.kpis.activeDayRate,
+        secondary: secondaryData.kpis.activeDayRate,
+        format: 'percent',
+      },
+      {
+        metric: 'PRs reviewed',
+        section: 'Reviews',
+        primary: primaryData.reviews.given.reviewedPRs,
+        secondary: secondaryData.reviews.given.reviewedPRs,
+        format: 'count',
+      },
+      {
+        metric: 'Comments given',
+        section: 'Reviews',
+        primary: primaryData.reviews.given.reviewComments,
+        secondary: secondaryData.reviews.given.reviewComments,
+        format: 'count',
+      },
+      {
+        metric: 'Own PRs reviewed',
+        section: 'Reviews',
+        primary: primaryData.reviews.received.reviewedPRs,
+        secondary: secondaryData.reviews.received.reviewedPRs,
+        format: 'count',
+      },
+      {
+        metric: 'Comments received',
+        section: 'Reviews',
+        primary: primaryData.reviews.received.reviewComments,
+        secondary: secondaryData.reviews.received.reviewComments,
+        format: 'count',
+      },
+      {
+        metric: 'Median issue cycle',
+        section: 'Flow',
         primary: primaryData.issueCycle.medianCycleTimeHours ?? 0,
         secondary: secondaryData.issueCycle.medianCycleTimeHours ?? 0,
+        format: 'hours',
+        lowerIsBetter: true,
       },
-      { metric: 'LOC / day', primary: primaryData.kpis.avgLocPerActiveDay, secondary: secondaryData.kpis.avgLocPerActiveDay },
-      { metric: 'Idle gap (d)', primary: primaryData.kpis.longestIdleGapDays, secondary: secondaryData.kpis.longestIdleGapDays },
+      {
+        metric: 'Longest idle gap',
+        section: 'Flow',
+        primary: primaryData.kpis.longestIdleGapDays,
+        secondary: secondaryData.kpis.longestIdleGapDays,
+        format: 'days',
+        lowerIsBetter: true,
+      },
+      {
+        metric: 'LOC per active day',
+        section: 'Flow',
+        primary: primaryData.kpis.avgLocPerActiveDay,
+        secondary: secondaryData.kpis.avgLocPerActiveDay,
+        format: 'loc',
+      },
     ];
   }, [primaryData, secondaryData]);
 
@@ -242,11 +392,11 @@ export default function ContributionsPage(): JSX.Element {
   );
 
   const primarySignalLabel = comparisonMode === 'date'
-    ? 'Range A'
-    : (leftHideDeveloperName ? maskedDeveloperLabel('left') : (primaryData?.login ?? 'Left side'));
+    ? rangeSummary(primaryData?.from ?? leftColumn.from, primaryData?.to ?? leftColumn.to)
+    : (leftHideDeveloperName ? maskedDeveloperLabel('left') : (primaryData?.login ?? 'Primary'));
   const secondarySignalLabel = comparisonMode === 'date'
-    ? 'Range B'
-    : (rightHideDeveloperName ? maskedDeveloperLabel('right') : (secondaryData?.login ?? 'Right side'));
+    ? rangeSummary(secondaryData?.from ?? effectiveRightColumn.from, secondaryData?.to ?? effectiveRightColumn.to)
+    : (rightHideDeveloperName ? maskedDeveloperLabel('right') : (secondaryData?.login ?? 'Comparison'));
 
   function renderDeveloperSelect(params: {
     column: ColumnKey;
@@ -303,8 +453,7 @@ export default function ContributionsPage(): JSX.Element {
     rawFrom: string;
     rawTo: string;
     disabled: boolean;
-    onFromChange: (value: string) => void;
-    onToChange: (value: string) => void;
+    onRangeChange: (value: { from: string; to: string }) => void;
     helperText?: string;
   }): JSX.Element {
     const {
@@ -313,39 +462,18 @@ export default function ContributionsPage(): JSX.Element {
       rawFrom,
       rawTo,
       disabled,
-      onFromChange,
-      onToChange,
+      onRangeChange,
       helperText,
     } = params;
 
     return (
-      <div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>From</label>
-            <input
-              type="date"
-              value={disabled ? effectiveFrom : rawFrom}
-              onChange={(event) => onFromChange(event.target.value)}
-              style={inputStyle}
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>To</label>
-            <input
-              type="date"
-              value={disabled ? effectiveTo : rawTo}
-              onChange={(event) => onToChange(event.target.value)}
-              style={inputStyle}
-              disabled={disabled}
-            />
-          </div>
-        </div>
-        {helperText ? (
-          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--panel-muted)' }}>{helperText}</div>
-        ) : null}
-      </div>
+      <DateRangePicker
+        from={disabled ? effectiveFrom : rawFrom}
+        to={disabled ? effectiveTo : rawTo}
+        disabled={disabled}
+        onChange={onRangeChange}
+        helperText={helperText}
+      />
     );
   }
 
@@ -372,12 +500,12 @@ export default function ContributionsPage(): JSX.Element {
       <div style={{ ...panelStyle, marginBottom: 16, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>
-              Comparison Mode
-            </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
-              {comparisonMode === 'developer' ? 'Developer comparison' : 'Date comparison'}
-            </h2>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>
+                Comparison Mode
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
+                {comparisonMode === 'developer' ? 'Profile comparison' : 'Time-window comparison'}
+              </h2>
           </div>
           <div
             style={{
@@ -439,7 +567,7 @@ export default function ContributionsPage(): JSX.Element {
           <div>
             <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Date mode</label>
             <select value={dateMode} onChange={(event) => setDateMode(event.target.value === 'created' ? 'created' : 'merged')} style={inputStyle}>
-              <option value="merged">Merged to dev</option>
+              <option value="merged">Merged to tracked base</option>
               <option value="created">PR created</option>
             </select>
           </div>
@@ -453,7 +581,7 @@ export default function ContributionsPage(): JSX.Element {
               disabled={dateMode === 'merged'}
             >
               <option value="merged">Merged only</option>
-              <option value="all">All dev PRs</option>
+              <option value="all">All tracked-base PRs</option>
             </select>
           </div>
 
@@ -492,9 +620,9 @@ export default function ContributionsPage(): JSX.Element {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>
-                Left Column
+                {comparisonMode === 'date' ? 'Primary Window' : 'Primary Profile'}
               </div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{columnLabel('left')}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{selectionPanelLabel('left', comparisonMode)}</h3>
             </div>
             <div style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(59,130,246,0.14)', color: '#bfdbfe', fontSize: 12, fontWeight: 700 }}>
               {rangeSummary(leftColumn.from, leftColumn.to)}
@@ -515,8 +643,7 @@ export default function ContributionsPage(): JSX.Element {
               rawFrom: leftColumn.from,
               rawTo: leftColumn.to,
               disabled: false,
-              onFromChange: (value) => setLeftColumn((current) => ({ ...current, from: value })),
-              onToChange: (value) => setLeftColumn((current) => ({ ...current, to: value })),
+              onRangeChange: (value) => setLeftColumn((current) => ({ ...current, ...value })),
             })}
           </div>
         </div>
@@ -525,9 +652,9 @@ export default function ContributionsPage(): JSX.Element {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>
-                Right Column
+                {comparisonMode === 'date' ? 'Comparison Window' : 'Comparison Profile'}
               </div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{columnLabel('right')}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{selectionPanelLabel('right', comparisonMode)}</h3>
             </div>
             <div style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.14)', color: '#fde68a', fontSize: 12, fontWeight: 700 }}>
               {rangeSummary(effectiveRightColumn.from, effectiveRightColumn.to)}
@@ -551,8 +678,7 @@ export default function ContributionsPage(): JSX.Element {
               rawFrom: rightColumn.from,
               rawTo: rightColumn.to,
               disabled: comparisonMode === 'developer',
-              onFromChange: (value) => setRightColumn((current) => ({ ...current, from: value })),
-              onToChange: (value) => setRightColumn((current) => ({ ...current, to: value })),
+              onRangeChange: (value) => setRightColumn((current) => ({ ...current, ...value })),
               helperText: comparisonMode === 'developer'
                 ? 'Locked to the left side so both columns compare the same date range.'
                 : undefined,
@@ -583,7 +709,9 @@ export default function ContributionsPage(): JSX.Element {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>
-                        {column === 'left' ? 'Left column' : 'Right column'}
+                        {comparisonMode === 'date'
+                          ? (column === 'left' ? 'Primary window' : 'Comparison window')
+                          : (column === 'left' ? 'Primary profile' : 'Comparison profile')}
                       </div>
                       <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>Identity Visibility</h3>
                     </div>
@@ -620,44 +748,26 @@ export default function ContributionsPage(): JSX.Element {
 
           <div style={{ marginBottom: 16 }}>
             <ContributionSignalsChart
-              title={comparisonMode === 'developer' ? 'Head-to-Head Developer Signals' : 'Date-Range Contribution Signals'}
+              title={comparisonMode === 'developer' ? 'Comparison Overview' : 'Time-Window Overview'}
               subtitle={comparisonMode === 'developer'
-                ? 'Higher is usually better except for issue cycle hours and idle gap days. When those two climb while active-day rate is low, output is usually thin or blocked.'
-                : `Comparing ${rangeSummary(primaryData.from, primaryData.to)} against ${rangeSummary(secondaryData.from, secondaryData.to)} for the same developer.`}
+                ? 'A billboard view of delivery, review, cadence, and flow signals across the two selected profiles.'
+                : `Comparing ${rangeSummary(primaryData.from, primaryData.to)} against ${rangeSummary(secondaryData.from, secondaryData.to)} for the same developer, with each metric shown in its own card.`}
               primaryLabel={primarySignalLabel}
               secondaryLabel={secondarySignalLabel}
               items={comparisonSignals}
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
-            <ContributionProfile
-              data={primaryData}
-              title={buildProfileTitle({
-                column: 'left',
-                data: primaryData,
-                from: primaryData.from,
-                to: primaryData.to,
-                comparisonMode,
-                hideDeveloperName: leftHideDeveloperName,
-              })}
-              gapMode={gapMode}
-              maskIdentity={leftMaskIdentity}
-            />
-            <ContributionProfile
-              data={secondaryData}
-              title={buildProfileTitle({
-                column: 'right',
-                data: secondaryData,
-                from: secondaryData.from,
-                to: secondaryData.to,
-                comparisonMode,
-                hideDeveloperName: rightHideDeveloperName,
-              })}
-              gapMode={gapMode}
-              maskIdentity={rightMaskIdentity}
-            />
-          </div>
+          <AlignedContributionProfiles
+            primaryData={primaryData}
+            secondaryData={secondaryData}
+            comparisonMode={comparisonMode}
+            gapMode={gapMode}
+            leftHideDeveloperName={leftHideDeveloperName}
+            rightHideDeveloperName={rightHideDeveloperName}
+            leftMaskIdentity={leftMaskIdentity}
+            rightMaskIdentity={rightMaskIdentity}
+          />
         </>
       )}
     </div>
