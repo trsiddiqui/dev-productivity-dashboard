@@ -3,12 +3,16 @@
 import { useEffect, useState } from 'react';
 import {
   areCoreRuntimeSettingsComplete,
+  areTestRailRuntimeSettingsComplete,
   buildRuntimeSettingsStorageKey,
-  createStoredRuntimeSettings,
+  createStoredCoreRuntimeSettings,
+  createStoredQaRuntimeSettings,
   getDefaultRuntimeSettingsFields,
   normalizeRuntimeSettingsFields,
+  RUNTIME_QA_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_COOKIE_NAME,
-  serializeStoredRuntimeSettings,
+  serializeStoredCoreRuntimeSettings,
+  serializeStoredQaRuntimeSettings,
   type RuntimeSettingsFields,
 } from '@/lib/runtime-settings';
 
@@ -44,13 +48,21 @@ function loadSettingsSnapshot(username: string): RuntimeSettingsSnapshot {
 function syncCookie(username: string, settings: RuntimeSettingsFields): void {
   if (!username || typeof document === 'undefined') return;
 
-  const serialized = serializeStoredRuntimeSettings(createStoredRuntimeSettings(username, settings));
-  document.cookie = `${RUNTIME_SETTINGS_COOKIE_NAME}=${serialized}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+  const serializedCore = serializeStoredCoreRuntimeSettings(createStoredCoreRuntimeSettings(username, settings));
+  document.cookie = `${RUNTIME_SETTINGS_COOKIE_NAME}=${serializedCore}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+
+  if (areTestRailRuntimeSettingsComplete(settings)) {
+    const serializedQa = serializeStoredQaRuntimeSettings(createStoredQaRuntimeSettings(username, settings));
+    document.cookie = `${RUNTIME_QA_SETTINGS_COOKIE_NAME}=${serializedQa}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+  } else {
+    document.cookie = `${RUNTIME_QA_SETTINGS_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  }
 }
 
 function clearCookie(): void {
   if (typeof document === 'undefined') return;
   document.cookie = `${RUNTIME_SETTINGS_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  document.cookie = `${RUNTIME_QA_SETTINGS_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
 function broadcastSettingsChanged(username: string): void {

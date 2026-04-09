@@ -1,4 +1,5 @@
 export const RUNTIME_SETTINGS_COOKIE_NAME = 'dpd_runtime_settings';
+export const RUNTIME_QA_SETTINGS_COOKIE_NAME = 'dpd_runtime_settings_qa';
 export const RUNTIME_SETTINGS_STORAGE_PREFIX = 'dpd-runtime-settings';
 
 export const DEFAULT_JIRA_BASE_URL = 'https://aligncommerce.atlassian.net';
@@ -18,6 +19,23 @@ export interface RuntimeSettingsFields {
 
 export interface StoredRuntimeSettings extends RuntimeSettingsFields {
   username: string;
+}
+
+export interface StoredCoreRuntimeSettings {
+  username: string;
+  githubToken: string;
+  githubOrg: string;
+  jiraBaseUrl: string;
+  jiraEmail: string;
+  jiraToken: string;
+  jiraStoryPointsField: string;
+}
+
+export interface StoredQaRuntimeSettings {
+  username: string;
+  testRailBaseUrl: string;
+  testRailEmail: string;
+  testRailToken: string;
 }
 
 function normalizeText(value: unknown): string {
@@ -65,12 +83,49 @@ export function createStoredRuntimeSettings(
   };
 }
 
+export function createStoredCoreRuntimeSettings(
+  username: string,
+  value?: Partial<RuntimeSettingsFields> | null,
+): StoredCoreRuntimeSettings {
+  const normalized = normalizeRuntimeSettingsFields(value);
+  return {
+    username: normalizeText(username),
+    githubToken: normalized.githubToken,
+    githubOrg: normalized.githubOrg,
+    jiraBaseUrl: normalized.jiraBaseUrl,
+    jiraEmail: normalized.jiraEmail,
+    jiraToken: normalized.jiraToken,
+    jiraStoryPointsField: normalized.jiraStoryPointsField,
+  };
+}
+
+export function createStoredQaRuntimeSettings(
+  username: string,
+  value?: Partial<RuntimeSettingsFields> | null,
+): StoredQaRuntimeSettings {
+  const normalized = normalizeRuntimeSettingsFields(value);
+  return {
+    username: normalizeText(username),
+    testRailBaseUrl: normalized.testRailBaseUrl,
+    testRailEmail: normalized.testRailEmail,
+    testRailToken: normalized.testRailToken,
+  };
+}
+
 export function buildRuntimeSettingsStorageKey(username: string): string {
   return `${RUNTIME_SETTINGS_STORAGE_PREFIX}:${normalizeText(username)}`;
 }
 
 export function serializeStoredRuntimeSettings(value: StoredRuntimeSettings): string {
   return encodeURIComponent(JSON.stringify(createStoredRuntimeSettings(value.username, value)));
+}
+
+export function serializeStoredCoreRuntimeSettings(value: StoredCoreRuntimeSettings): string {
+  return encodeURIComponent(JSON.stringify(createStoredCoreRuntimeSettings(value.username, value)));
+}
+
+export function serializeStoredQaRuntimeSettings(value: StoredQaRuntimeSettings): string {
+  return encodeURIComponent(JSON.stringify(createStoredQaRuntimeSettings(value.username, value)));
 }
 
 export function parseStoredRuntimeSettings(raw?: string | null): StoredRuntimeSettings | null {
@@ -82,6 +137,34 @@ export function parseStoredRuntimeSettings(raw?: string | null): StoredRuntimeSe
     const username = normalizeText(parsed?.username);
     if (!username) return null;
     return createStoredRuntimeSettings(username, parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function parseStoredCoreRuntimeSettings(raw?: string | null): StoredCoreRuntimeSettings | null {
+  if (!raw) return null;
+
+  try {
+    const decoded = decodeURIComponent(raw);
+    const parsed = JSON.parse(decoded) as Partial<StoredCoreRuntimeSettings> | null;
+    const username = normalizeText(parsed?.username);
+    if (!username) return null;
+    return createStoredCoreRuntimeSettings(username, parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function parseStoredQaRuntimeSettings(raw?: string | null): StoredQaRuntimeSettings | null {
+  if (!raw) return null;
+
+  try {
+    const decoded = decodeURIComponent(raw);
+    const parsed = JSON.parse(decoded) as Partial<StoredQaRuntimeSettings> | null;
+    const username = normalizeText(parsed?.username);
+    if (!username) return null;
+    return createStoredQaRuntimeSettings(username, parsed);
   } catch {
     return null;
   }

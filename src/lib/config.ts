@@ -2,7 +2,9 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import {
   getDefaultRuntimeSettingsFields,
-  parseStoredRuntimeSettings,
+  parseStoredCoreRuntimeSettings,
+  parseStoredQaRuntimeSettings,
+  RUNTIME_QA_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_COOKIE_NAME,
   type RuntimeSettingsFields,
 } from './runtime-settings';
@@ -68,23 +70,33 @@ function resolveRuntimeConfigFromStoredSettings(): RuntimeConfig {
 }
 
 export function resolveRuntimeConfigForRequest(req: Request, authUser: string): RuntimeConfig {
-  const raw = readCookie(req, RUNTIME_SETTINGS_COOKIE_NAME);
-  const stored = parseStoredRuntimeSettings(raw);
-  if (!stored || stored.username !== authUser) {
+  const rawCore = readCookie(req, RUNTIME_SETTINGS_COOKIE_NAME);
+  const storedCore = parseStoredCoreRuntimeSettings(rawCore);
+  if (!storedCore || storedCore.username !== authUser) {
     return resolveIncompleteRuntimeConfig();
   }
 
+  const rawQa = readCookie(req, RUNTIME_QA_SETTINGS_COOKIE_NAME);
+  const storedQa = parseStoredQaRuntimeSettings(rawQa);
+  const qaSettings = storedQa && storedQa.username === authUser
+    ? storedQa
+    : {
+      testRailBaseUrl: '',
+      testRailEmail: '',
+      testRailToken: '',
+    };
+
   return {
     ...envConfig,
-    githubToken: stored.githubToken,
-    githubOrg: stored.githubOrg,
-    jiraBaseUrl: stored.jiraBaseUrl,
-    jiraEmail: stored.jiraEmail,
-    jiraToken: stored.jiraToken,
-    jiraStoryPointsField: stored.jiraStoryPointsField,
-    testRailBaseUrl: stored.testRailBaseUrl,
-    testRailEmail: stored.testRailEmail,
-    testRailToken: stored.testRailToken,
+    githubToken: storedCore.githubToken,
+    githubOrg: storedCore.githubOrg,
+    jiraBaseUrl: storedCore.jiraBaseUrl,
+    jiraEmail: storedCore.jiraEmail,
+    jiraToken: storedCore.jiraToken,
+    jiraStoryPointsField: storedCore.jiraStoryPointsField,
+    testRailBaseUrl: qaSettings.testRailBaseUrl,
+    testRailEmail: qaSettings.testRailEmail,
+    testRailToken: qaSettings.testRailToken,
   };
 }
 
