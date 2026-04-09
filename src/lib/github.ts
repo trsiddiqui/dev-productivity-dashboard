@@ -5,6 +5,8 @@ import { eachDayOfInterval, formatISO } from 'date-fns';
 export const DEV_BASE_BRANCH = 'dev';
 export const WEBSITE_STAGING_REPO = 'aligncommerce/website';
 export const WEBSITE_STAGING_BRANCH = 'staging';
+export const QA_AUTOMATION_REPO = 'aligncommerce/test-engineering1';
+export const QA_AUTOMATION_BASE_BRANCH = 'main';
 const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 
 type GithubPRDateField = 'created' | 'merged';
@@ -42,6 +44,14 @@ interface GHPullRequestNode {
     nodes?: Array<{ comments?: { totalCount?: number } | null }>;
   } | null;
   timelineItems: GHTimeline;
+}
+interface GHPullRequestFileNode {
+  filename: string;
+  previous_filename?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
 }
 interface GHSearchEdge { node: GHPullRequestNode }
 interface GHSearchPageInfo { hasNextPage: boolean; endCursor: string | null }
@@ -708,4 +718,53 @@ export async function getGithubPRStatsByUrls(
   }
 
   return out;
+}
+
+export async function getGithubPullRequestFiles(params: {
+  owner: string;
+  repo: string;
+  number: number;
+}): Promise<Array<{
+  filename: string;
+  previousFilename?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+}>> {
+  const { owner, repo, number } = params;
+  if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${cfg.githubToken}`,
+    Accept: 'application/vnd.github+json',
+  };
+
+  const files: GHPullRequestFileNode[] = [];
+  let page = 1;
+  while (true) {
+    const url = new URL(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}/files`);
+    url.searchParams.set('per_page', '100');
+    url.searchParams.set('page', String(page));
+
+    const resp = await fetch(url.toString(), { headers, cache: 'no-store' });
+    const json = await resp.json() as GHPullRequestFileNode[] | { message?: string };
+    if (!resp.ok) {
+      throw new Error(`GitHub pull files failed (${resp.status}): ${JSON.stringify(json)}`);
+    }
+
+    const pageItems = Array.isArray(json) ? json : [];
+    files.push(...pageItems);
+    if (pageItems.length < 100) break;
+    page += 1;
+  }
+
+  return files.map((file) => ({
+    filename: file.filename,
+    previousFilename: file.previous_filename,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    changes: file.changes,
+  }));
 }

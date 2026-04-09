@@ -260,9 +260,20 @@ export interface TestRailStatusLite {
 export interface QaMetricDefinition {
   id: string;
   name: string;
-  category: 'Activity' | 'Efficiency' | 'Outcomes' | 'Risk';
+  category: 'Activity' | 'Efficiency' | 'Outcomes' | 'Risk' | 'Delivery' | 'Coverage' | 'Engineering';
   description: string;
   derivation: string;
+}
+
+export interface QaGithubAutomationSummary {
+  login: string;
+  mergedPrs: number;
+  testAssetFilesChanged: number;
+  totalLocChanged: number;
+  medianLocChangedPerPr: number | null;
+  medianFilesChangedPerPr: number | null;
+  engineeringFilesChanged: number;
+  featureCoverageBreadth: number;
 }
 
 export interface QaSummary {
@@ -288,6 +299,7 @@ export interface QaSummary {
   runsAssigned: number;
   runsCreated: number;
   completedOwnedRuns: number;
+  github: QaGithubAutomationSummary | null;
 }
 
 export interface QaDailyPoint {
@@ -310,6 +322,7 @@ export interface QaStatusBreakdownItem {
 export interface QaCatalogResponse {
   projects: TestRailProjectLite[];
   users: TestRailUserLite[];
+  githubUsers: GithubUser[];
   statuses: TestRailStatusLite[];
   warnings?: string[];
 }

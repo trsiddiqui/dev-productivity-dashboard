@@ -16,6 +16,8 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
   const projectId = Number(searchParams.get('projectId') ?? '');
   const leftUserId = Number(searchParams.get('leftUserId') ?? '');
   const rightUserId = Number(searchParams.get('rightUserId') ?? '');
+  const leftGithubLogin = searchParams.get('leftGithubLogin')?.trim() || null;
+  const rightGithubLogin = searchParams.get('rightGithubLogin')?.trim() || null;
 
   if (!from || !to || !Number.isFinite(projectId) || !Number.isFinite(leftUserId) || !Number.isFinite(rightUserId)) {
     return NextResponse.json({ error: 'Missing required params: from, to, projectId, leftUserId, rightUserId' }, { status: 400 });
@@ -41,6 +43,8 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
       leftUser,
       rightUser,
       statuses,
+      leftGithubLogin,
+      rightGithubLogin,
     });
 
     const payload: QaCompareResponse = {
@@ -53,6 +57,7 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
       daily: comparison.daily,
       statusBreakdown: comparison.statusBreakdown,
       metricDefinitions: comparison.metricDefinitions,
+      warnings: comparison.warnings,
     };
     return NextResponse.json(payload);
   } catch (error) {
