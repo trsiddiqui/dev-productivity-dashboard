@@ -5,13 +5,12 @@ import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
 import { aggregateContributionPRsByDay } from '../../../lib/contributions';
 import type { StatsResponse, KPIs, JiraIssue, PR, LinkedPR, CommitTimeseriesItem } from '../../../lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
+import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
-  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
-
+async function getStatsResponse(req: Request): Promise<Response> {
   const warnings: string[] = [];
   try {
     const { searchParams } = new URL(req.url);
@@ -146,4 +145,14 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : 'Internal error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+  return withCachedRouteResponse({
+    req,
+    authUser: auth,
+    namespace: 'stats',
+    handler: () => getStatsResponse(req),
+  });
 }

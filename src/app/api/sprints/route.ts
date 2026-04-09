@@ -2,14 +2,12 @@ import { NextResponse } from 'next/server';
 import { getJiraSprints } from '../../../lib/jira';
 import { JiraSprintLite } from '@/lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
+import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-
-export async function GET(req: Request) {
-  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
-
+async function getSprintsResponse(req: Request): Promise<Response> {
   const warnings: string[] = [];
   try {
     const { searchParams } = new URL(req.url);
@@ -35,4 +33,14 @@ export async function GET(req: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ sprints: [], warnings: [`Failed to fetch sprints: ${msg}`] });
   }
+}
+
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+  return withCachedRouteResponse({
+    req,
+    authUser: auth,
+    namespace: 'sprints',
+    handler: () => getSprintsResponse(req),
+  });
 }

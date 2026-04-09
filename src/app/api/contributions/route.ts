@@ -24,6 +24,7 @@ import type {
 } from '@/lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
 import { getIssuePhaseTimes, getJiraIssuePRs, getJiraIssuesByKeys } from '@/lib/jira';
+import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,10 +65,7 @@ function mergeLinkSources(
   return Array.from(merged).sort((left, right) => linkSourceOrder[left] - linkSourceOrder[right]);
 }
 
-export async function GET(req: Request) {
-  const auth = await requireAuthOr401(req);
-  if (auth instanceof Response) return auth;
-
+async function getContributionsResponse(req: Request): Promise<Response> {
   try {
     const warnings: string[] = [];
     const { searchParams } = new URL(req.url);
@@ -344,4 +342,16 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : 'Internal error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req);
+  if (auth instanceof Response) return auth;
+
+  return withCachedRouteResponse({
+    req,
+    authUser: auth,
+    namespace: 'contributions',
+    handler: () => getContributionsResponse(req),
+  });
 }
