@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  areRuntimeSettingsComplete,
+  areCoreRuntimeSettingsComplete,
   buildRuntimeSettingsStorageKey,
   createStoredRuntimeSettings,
   getDefaultRuntimeSettingsFields,
@@ -76,7 +76,7 @@ export function useUserRuntimeSettings(username: string): {
     const refresh = () => {
       const next = loadSettingsSnapshot(username);
       setState(next);
-      if (next.configured && areRuntimeSettingsComplete(next.settings)) {
+      if (next.configured && areCoreRuntimeSettingsComplete(next.settings)) {
         syncCookie(username, next.settings);
       } else {
         clearCookie();
@@ -113,7 +113,7 @@ export function useUserRuntimeSettings(username: string): {
       buildRuntimeSettingsStorageKey(username),
       JSON.stringify(normalized),
     );
-    if (areRuntimeSettingsComplete(normalized)) {
+    if (areCoreRuntimeSettingsComplete(normalized)) {
       syncCookie(username, normalized);
     } else {
       clearCookie();
@@ -127,7 +127,7 @@ export function useUserRuntimeSettings(username: string): {
   const reload = () => {
     const next = loadSettingsSnapshot(username);
     setState(next);
-    if (next.configured && areRuntimeSettingsComplete(next.settings)) {
+    if (next.configured && areCoreRuntimeSettingsComplete(next.settings)) {
       syncCookie(username, next.settings);
     } else {
       clearCookie();

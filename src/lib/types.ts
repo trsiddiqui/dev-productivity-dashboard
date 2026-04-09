@@ -232,6 +232,101 @@ export interface ContributionResponse {
   warnings?: string[];
 }
 
+export interface TestRailProjectLite {
+  id: number;
+  name: string;
+  isCompleted?: boolean;
+  announcement?: string | null;
+  showAnnouncement?: boolean;
+}
+
+export interface TestRailUserLite {
+  id: number;
+  name: string;
+  email?: string;
+  isActive?: boolean;
+  roleId?: number;
+}
+
+export interface TestRailStatusLite {
+  id: number;
+  name: string;
+  label: string;
+  isFinal: boolean;
+  isUntested: boolean;
+  isSystem: boolean;
+}
+
+export interface QaMetricDefinition {
+  id: string;
+  name: string;
+  category: 'Activity' | 'Efficiency' | 'Outcomes' | 'Risk';
+  description: string;
+  derivation: string;
+}
+
+export interface QaSummary {
+  userId: number;
+  userName: string;
+  totalResults: number;
+  uniqueTests: number;
+  runsTouched: number;
+  activeDays: number;
+  avgResultsPerActiveDay: number | null;
+  passed: number;
+  failed: number;
+  blocked: number;
+  retest: number;
+  otherStatuses: number;
+  passRate: number | null;
+  failurePressureRate: number | null;
+  totalElapsedSeconds: number;
+  avgElapsedSeconds: number | null;
+  medianElapsedSeconds: number | null;
+  commentsLogged: number;
+  defectsLinked: number;
+  runsAssigned: number;
+  runsCreated: number;
+  completedOwnedRuns: number;
+}
+
+export interface QaDailyPoint {
+  date: string;
+  leftResults: number;
+  rightResults: number;
+  leftPassed: number;
+  rightPassed: number;
+  leftFailed: number;
+  rightFailed: number;
+}
+
+export interface QaStatusBreakdownItem {
+  statusId: number;
+  statusLabel: string;
+  leftCount: number;
+  rightCount: number;
+}
+
+export interface QaCatalogResponse {
+  projects: TestRailProjectLite[];
+  users: TestRailUserLite[];
+  statuses: TestRailStatusLite[];
+  warnings?: string[];
+}
+
+export interface QaCompareResponse {
+  from: string;
+  to: string;
+  projectId: number;
+  projectName?: string;
+  left: QaSummary;
+  right: QaSummary;
+  daily: QaDailyPoint[];
+  statusBreakdown: QaStatusBreakdownItem[];
+  metricDefinitions: QaMetricDefinition[];
+  warnings?: string[];
+}
+
 
 
 export interface PRLifecycle {

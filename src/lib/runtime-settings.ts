@@ -11,6 +11,9 @@ export interface RuntimeSettingsFields {
   jiraEmail: string;
   jiraToken: string;
   jiraStoryPointsField: string;
+  testRailBaseUrl: string;
+  testRailEmail: string;
+  testRailToken: string;
 }
 
 export interface StoredRuntimeSettings extends RuntimeSettingsFields {
@@ -29,6 +32,9 @@ export function getDefaultRuntimeSettingsFields(): RuntimeSettingsFields {
     jiraEmail: '',
     jiraToken: '',
     jiraStoryPointsField: DEFAULT_JIRA_STORY_POINTS_FIELD,
+    testRailBaseUrl: '',
+    testRailEmail: '',
+    testRailToken: '',
   };
 }
 
@@ -43,6 +49,9 @@ export function normalizeRuntimeSettingsFields(
     jiraEmail: normalizeText(value?.jiraEmail) || defaults.jiraEmail,
     jiraToken: normalizeText(value?.jiraToken) || defaults.jiraToken,
     jiraStoryPointsField: normalizeText(value?.jiraStoryPointsField) || defaults.jiraStoryPointsField,
+    testRailBaseUrl: normalizeText(value?.testRailBaseUrl) || defaults.testRailBaseUrl,
+    testRailEmail: normalizeText(value?.testRailEmail) || defaults.testRailEmail,
+    testRailToken: normalizeText(value?.testRailToken) || defaults.testRailToken,
   };
 }
 
@@ -78,7 +87,7 @@ export function parseStoredRuntimeSettings(raw?: string | null): StoredRuntimeSe
   }
 }
 
-export function areRuntimeSettingsComplete(value?: Partial<RuntimeSettingsFields> | null): boolean {
+export function areCoreRuntimeSettingsComplete(value?: Partial<RuntimeSettingsFields> | null): boolean {
   const normalized = normalizeRuntimeSettingsFields(value);
   return [
     normalized.githubToken,
@@ -87,6 +96,15 @@ export function areRuntimeSettingsComplete(value?: Partial<RuntimeSettingsFields
     normalized.jiraEmail,
     normalized.jiraToken,
     normalized.jiraStoryPointsField,
+  ].every((field) => field.length > 0);
+}
+
+export function areTestRailRuntimeSettingsComplete(value?: Partial<RuntimeSettingsFields> | null): boolean {
+  const normalized = normalizeRuntimeSettingsFields(value);
+  return [
+    normalized.testRailBaseUrl,
+    normalized.testRailEmail,
+    normalized.testRailToken,
   ].every((field) => field.length > 0);
 }
 
