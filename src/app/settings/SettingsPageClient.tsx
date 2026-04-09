@@ -144,7 +144,7 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
         }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>How your credentials are stored and used</div>
           <div style={{ color: 'var(--panel-muted)', fontSize: 14, lineHeight: 1.6 }}>
-            These secrets are stored in <code>localStorage</code> in this browser, scoped to the signed-in dashboard username. They are mirrored into a same-origin cookie only so this app’s authenticated API requests can read them on the server and call GitHub, Jira, and TestRail on your behalf.
+            These secrets are stored in <code>localStorage</code> in this browser, scoped to the signed-in dashboard username. They are mirrored into a same-origin cookie only so this app’s authenticated API requests can read them on the server and call GitHub, Jira, and TestRail on your behalf. The keys are NOT stored or logged anywhere in the server, and with HTTPS they are encrypted during transit as well.
           </div>
           <div style={{ color: 'var(--panel-muted)', fontSize: 14, lineHeight: 1.6 }}>
             They are not shown back in plain text in the header, and this page masks them anywhere they are echoed. If you sign in from a different browser or clear site storage, you will need to enter them again there.
