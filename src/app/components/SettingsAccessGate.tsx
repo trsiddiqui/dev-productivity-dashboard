@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { areRuntimeSettingsComplete } from '@/lib/runtime-settings';
+import { areCoreRuntimeSettingsComplete } from '@/lib/runtime-settings';
 import { useUserRuntimeSettings } from './runtime-settings-client';
 
 function buildNextPath(pathname: string, searchParams: URLSearchParams): string {
@@ -17,7 +17,7 @@ export default function SettingsAccessGate(props: { username: string; children: 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { settings, ready } = useUserRuntimeSettings(username);
-  const settingsReady = areRuntimeSettingsComplete(settings);
+  const settingsReady = areCoreRuntimeSettingsComplete(settings);
   const onSettingsPage = pathname === '/settings';
 
   useEffect(() => {

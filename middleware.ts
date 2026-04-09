@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  areRuntimeSettingsComplete,
+  areCoreRuntimeSettingsComplete,
   parseStoredRuntimeSettings,
   RUNTIME_SETTINGS_COOKIE_NAME,
 } from './src/lib/runtime-settings';
@@ -53,7 +53,7 @@ export async function middleware(req: NextRequest) {
   const settingsReady = !!username
     && !!storedSettings
     && storedSettings.username === username
-    && areRuntimeSettingsComplete(storedSettings);
+    && areCoreRuntimeSettingsComplete(storedSettings);
 
   if (pathname === '/') {
     if (!ok) return NextResponse.next();

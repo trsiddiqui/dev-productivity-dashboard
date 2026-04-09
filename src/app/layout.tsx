@@ -49,7 +49,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           jiraBaseUrl: typeof parsed.jiraBaseUrl === 'string' && parsed.jiraBaseUrl.trim() ? parsed.jiraBaseUrl.trim() : ${JSON.stringify(DEFAULT_JIRA_BASE_URL)},
           jiraEmail: typeof parsed.jiraEmail === 'string' ? parsed.jiraEmail.trim() : '',
           jiraToken: typeof parsed.jiraToken === 'string' ? parsed.jiraToken.trim() : '',
-          jiraStoryPointsField: typeof parsed.jiraStoryPointsField === 'string' && parsed.jiraStoryPointsField.trim() ? parsed.jiraStoryPointsField.trim() : ${JSON.stringify(DEFAULT_JIRA_STORY_POINTS_FIELD)}
+          jiraStoryPointsField: typeof parsed.jiraStoryPointsField === 'string' && parsed.jiraStoryPointsField.trim() ? parsed.jiraStoryPointsField.trim() : ${JSON.stringify(DEFAULT_JIRA_STORY_POINTS_FIELD)},
+          testRailBaseUrl: typeof parsed.testRailBaseUrl === 'string' ? parsed.testRailBaseUrl.trim() : '',
+          testRailEmail: typeof parsed.testRailEmail === 'string' ? parsed.testRailEmail.trim() : '',
+          testRailToken: typeof parsed.testRailToken === 'string' ? parsed.testRailToken.trim() : ''
         };
         var complete = !!(normalized.githubToken && normalized.githubOrg && normalized.jiraBaseUrl && normalized.jiraEmail && normalized.jiraToken && normalized.jiraStoryPointsField);
         if(!complete){
@@ -93,6 +96,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/individual">Individual</Link>
               <Link href="/contributions">Contributions</Link>
               <Link href="/sprint">Sprint</Link>
+              <Link href="/qa">QA</Link>
               <Link href="/settings">Settings</Link>
               <div className="spacer" />
               <RuntimeSettingsStatus username={user ?? ''} />

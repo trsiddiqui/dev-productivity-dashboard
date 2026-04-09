@@ -3,7 +3,8 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type JSX } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  areRuntimeSettingsComplete,
+  areCoreRuntimeSettingsComplete,
+  areTestRailRuntimeSettingsComplete,
   getDefaultRuntimeSettingsFields,
   type RuntimeSettingsFields,
 } from '@/lib/runtime-settings';
@@ -68,8 +69,9 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
   const nextPath = rawNextPath && rawNextPath.startsWith('/') && !rawNextPath.startsWith('//')
     ? rawNextPath
     : null;
-  const settingsComplete = areRuntimeSettingsComplete(form);
-  const storedSettingsComplete = areRuntimeSettingsComplete(settings);
+  const coreSettingsComplete = areCoreRuntimeSettingsComplete(form);
+  const storedCoreSettingsComplete = areCoreRuntimeSettingsComplete(settings);
+  const testRailSettingsComplete = areTestRailRuntimeSettingsComplete(form);
 
   useEffect(() => {
     if (!ready) return;
@@ -77,9 +79,9 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
   }, [ready, settings]);
 
   useEffect(() => {
-    if (!ready || !nextPath || !configured || !storedSettingsComplete) return;
+    if (!ready || !nextPath || !configured || !storedCoreSettingsComplete) return;
     router.replace(nextPath);
-  }, [configured, nextPath, ready, router, storedSettingsComplete]);
+  }, [configured, nextPath, ready, router, storedCoreSettingsComplete]);
 
   function updateField<K extends keyof RuntimeSettingsFields>(key: K, value: RuntimeSettingsFields[K]): void {
     setForm((current) => ({ ...current, [key]: value }));
@@ -90,7 +92,7 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
     event.preventDefault();
     const normalized = save(form);
     setForm(normalized);
-    if (areRuntimeSettingsComplete(normalized) && nextPath) {
+    if (areCoreRuntimeSettingsComplete(normalized) && nextPath) {
       router.replace(nextPath);
       return;
     }
@@ -114,7 +116,7 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Configured for {username}</div>
             <div style={{ color: 'var(--panel-muted)', fontSize: 14 }}>
-              {storedSettingsComplete ? 'Browser-specific values are active for this user.' : 'Complete all required fields to unlock the rest of the dashboard.'}
+              {storedCoreSettingsComplete ? 'Core browser-specific values are active for this user.' : 'Complete the GitHub and Jira fields to unlock the rest of the dashboard.'}
             </div>
           </div>
           {saveMessage && (
@@ -142,7 +144,7 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
         }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>How your credentials are stored and used</div>
           <div style={{ color: 'var(--panel-muted)', fontSize: 14, lineHeight: 1.6 }}>
-            These secrets are stored in <code>localStorage</code> in this browser, scoped to the signed-in dashboard username. They are mirrored into a same-origin cookie only so this app’s authenticated API requests can read them on the server and call GitHub and Jira on your behalf.
+            These secrets are stored in <code>localStorage</code> in this browser, scoped to the signed-in dashboard username. They are mirrored into a same-origin cookie only so this app’s authenticated API requests can read them on the server and call GitHub, Jira, and TestRail on your behalf.
           </div>
           <div style={{ color: 'var(--panel-muted)', fontSize: 14, lineHeight: 1.6 }}>
             They are not shown back in plain text in the header, and this page masks them anywhere they are echoed. If you sign in from a different browser or clear site storage, you will need to enter them again there.
@@ -190,13 +192,36 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
               onChange={(value) => updateField('jiraStoryPointsField', value)}
               placeholder="customfield_11125"
             />
+            <Field
+              label="TestRail base URL"
+              value={form.testRailBaseUrl}
+              onChange={(value) => updateField('testRailBaseUrl', value)}
+              placeholder="https://company.testrail.io"
+              help="Optional for the main dashboard. Required for the QA page."
+            />
+            <Field
+              label="TestRail email"
+              value={form.testRailEmail}
+              onChange={(value) => updateField('testRailEmail', value)}
+              placeholder="qa@company.com"
+              help="TestRail uses HTTP basic auth with email plus API key."
+            />
+            <Field
+              label="TestRail API token"
+              type="password"
+              value={form.testRailToken}
+              onChange={(value) => updateField('testRailToken', value)}
+              placeholder="TestRail API key"
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ color: 'var(--panel-muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>
-              {settingsComplete
-                ? 'All required fields are filled. Saving will unlock the rest of the dashboard for this signed-in user in this browser.'
-                : 'All fields are required before the dashboard will allow navigation beyond this page.'}
+              {coreSettingsComplete
+                ? (testRailSettingsComplete
+                  ? 'Core dashboard fields and TestRail QA fields are filled. Saving will unlock the dashboard and QA page for this browser.'
+                  : 'Core dashboard fields are filled. TestRail fields remain optional until you want to use the QA page.')
+                : 'GitHub and Jira fields are required before the dashboard will allow navigation beyond this page.'}
             </div>
             <button
               type="submit"

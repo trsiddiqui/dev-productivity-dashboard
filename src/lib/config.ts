@@ -39,6 +39,9 @@ function resolveEnvConfig(): RuntimeConfig {
     jiraToken: process.env.JIRA_API_TOKEN ?? '',
     jiraStoryPointsField: process.env.JIRA_STORY_POINTS_FIELD ?? 'customfield_10026',
     jiraQAAssigneeField: process.env.JIRA_QA_ASSIGNEE_FIELD ?? 'customfield_11370',
+    testRailBaseUrl: process.env.TESTRAIL_BASE_URL ?? '',
+    testRailEmail: process.env.TESTRAIL_EMAIL ?? '',
+    testRailToken: process.env.TESTRAIL_API_TOKEN ?? '',
   };
 }
 
@@ -54,6 +57,9 @@ function resolveIncompleteRuntimeConfig(): RuntimeConfig {
     jiraEmail: '',
     jiraToken: '',
     jiraStoryPointsField: defaults.jiraStoryPointsField,
+    testRailBaseUrl: '',
+    testRailEmail: '',
+    testRailToken: '',
   };
 }
 
@@ -76,6 +82,9 @@ export function resolveRuntimeConfigForRequest(req: Request, authUser: string): 
     jiraEmail: stored.jiraEmail,
     jiraToken: stored.jiraToken,
     jiraStoryPointsField: stored.jiraStoryPointsField,
+    testRailBaseUrl: stored.testRailBaseUrl,
+    testRailEmail: stored.testRailEmail,
+    testRailToken: stored.testRailToken,
   };
 }
 
@@ -127,5 +136,14 @@ export const cfg = Object.freeze({
   },
   get jiraQAAssigneeField(): string {
     return getRuntimeConfig().jiraQAAssigneeField;
+  },
+  get testRailBaseUrl(): string {
+    return getRuntimeConfig().testRailBaseUrl;
+  },
+  get testRailEmail(): string {
+    return getRuntimeConfig().testRailEmail;
+  },
+  get testRailToken(): string {
+    return getRuntimeConfig().testRailToken;
   },
 }) as RuntimeConfig;

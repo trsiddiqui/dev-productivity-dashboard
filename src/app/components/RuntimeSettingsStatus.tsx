@@ -134,9 +134,21 @@ export default function RuntimeSettingsStatus(props: { username: string }): JSX.
                 <div style={{ color: 'var(--panel-muted)' }}>Jira API token</div>
                 <div style={valueCellStyle}>{jiraTokenLabel}</div>
               </div>
-              <div style={{ ...valueRowStyle, borderBottom: 'none' }}>
+              <div style={valueRowStyle}>
                 <div style={{ color: 'var(--panel-muted)' }}>Story points field</div>
                 <div style={valueCellStyle}>{settings.jiraStoryPointsField || 'Not set'}</div>
+              </div>
+              <div style={valueRowStyle}>
+                <div style={{ color: 'var(--panel-muted)' }}>TestRail base URL</div>
+                <div style={valueCellStyle}>{settings.testRailBaseUrl || 'Not set'}</div>
+              </div>
+              <div style={valueRowStyle}>
+                <div style={{ color: 'var(--panel-muted)' }}>TestRail email</div>
+                <div style={valueCellStyle}>{settings.testRailEmail || 'Not set'}</div>
+              </div>
+              <div style={{ ...valueRowStyle, borderBottom: 'none' }}>
+                <div style={{ color: 'var(--panel-muted)' }}>TestRail API token</div>
+                <div style={valueCellStyle}>{maskSecret(settings.testRailToken)}</div>
               </div>
             </div>
 
