@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getJiraProjects } from '../../../lib/jira';
 import type { ProjectsResponse, JiraProjectLite } from '../../../lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
+import { withRequestRuntimeConfig } from '@/lib/config';
 import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
@@ -24,10 +25,10 @@ async function getProjectsResponse(): Promise<Response> {
 
 export async function GET(req: Request) {
   const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
-  return withCachedRouteResponse({
+  return withRequestRuntimeConfig(req, auth, () => withCachedRouteResponse({
     req,
     authUser: auth,
     namespace: 'projects',
     handler: getProjectsResponse,
-  });
+  }));
 }

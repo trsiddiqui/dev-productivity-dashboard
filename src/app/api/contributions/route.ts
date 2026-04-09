@@ -23,6 +23,7 @@ import type {
   JiraIssue,
 } from '@/lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
+import { withRequestRuntimeConfig } from '@/lib/config';
 import { getIssuePhaseTimes, getJiraIssuePRs, getJiraIssuesByKeys } from '@/lib/jira';
 import { withCachedRouteResponse } from '@/lib/route-cache';
 
@@ -348,10 +349,10 @@ export async function GET(req: Request) {
   const auth = await requireAuthOr401(req);
   if (auth instanceof Response) return auth;
 
-  return withCachedRouteResponse({
+  return withRequestRuntimeConfig(req, auth, () => withCachedRouteResponse({
     req,
     authUser: auth,
     namespace: 'contributions',
     handler: () => getContributionsResponse(req),
-  });
+  }));
 }

@@ -1,5 +1,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  areRuntimeSettingsComplete,
+  parseStoredRuntimeSettings,
+  RUNTIME_SETTINGS_COOKIE_NAME,
+} from './src/lib/runtime-settings';
 
 const COOKIE_NAME = 'dpd_auth';
 const SECRET = process.env.AUTH_SECRET || 'dev-change-me';
@@ -21,11 +26,18 @@ async function verifyToken(token?: string | null): Promise<boolean> {
 }
 
 const PUBLIC_PATHS = new Set([
-  '/',
   '/api/auth/login',
   '/api/auth/logout',
   '/favicon.ico',
 ]);
+
+function buildSettingsRedirect(req: NextRequest): NextResponse {
+  const url = req.nextUrl.clone();
+  const nextTarget = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+  url.pathname = '/settings';
+  url.searchParams.set('next', nextTarget);
+  return NextResponse.redirect(url);
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -33,15 +45,38 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith('/_next') || pathname.startsWith('/assets') || pathname.startsWith('/images')) {
     return NextResponse.next();
   }
-  if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
-
   const token = req.cookies.get(COOKIE_NAME)?.value;
+  const runtimeSettingsCookie = req.cookies.get(RUNTIME_SETTINGS_COOKIE_NAME)?.value ?? null;
   const ok = await verifyToken(token);
+  const username = ok && token ? token.slice(0, token.lastIndexOf('|')) : null;
+  const storedSettings = parseStoredRuntimeSettings(runtimeSettingsCookie);
+  const settingsReady = !!username
+    && !!storedSettings
+    && storedSettings.username === username
+    && areRuntimeSettingsComplete(storedSettings);
+
+  if (pathname === '/') {
+    if (!ok) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = settingsReady ? '/individual' : '/settings';
+    return NextResponse.redirect(url);
+  }
+
+  if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
 
 
   if (pathname.startsWith('/api/')) {
     if (!ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!settingsReady) {
+      return NextResponse.json(
+        {
+          error: 'Settings required',
+          message: 'Complete the connection settings before using dashboard APIs.',
+        },
+        { status: 428 },
+      );
     }
     return NextResponse.next();
   }
@@ -54,12 +89,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-
-  if (pathname === '/') {
-    const url = req.nextUrl.clone();
-    url.pathname = '/';
-    return NextResponse.redirect(url);
+  if (!settingsReady && pathname !== '/settings') {
+    return buildSettingsRedirect(req);
   }
+
 
   return NextResponse.next();
 }

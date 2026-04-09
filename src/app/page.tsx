@@ -5,7 +5,10 @@ import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const sp = useSearchParams();
-  const next = sp.get('next') || '/';
+  const requestedNext = sp.get('next');
+  const next = requestedNext && requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/individual';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);

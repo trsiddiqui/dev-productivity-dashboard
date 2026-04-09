@@ -19,7 +19,7 @@ import type {
 } from '@/lib/types';
 import { eachDayOfInterval, formatISO } from 'date-fns';
 import { requireAuthOr401 } from '@/lib/auth';
-import { cfg } from '@/lib/config'; // NEW
+import { cfg, withRequestRuntimeConfig } from '@/lib/config';
 import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
@@ -389,10 +389,10 @@ async function getSprintStatsResponse(req: Request): Promise<Response> {
 
 export async function GET(req: Request) {
   const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
-  return withCachedRouteResponse({
+  return withRequestRuntimeConfig(req, auth, () => withCachedRouteResponse({
     req,
     authUser: auth,
     namespace: 'sprint-stats',
     handler: () => getSprintStatsResponse(req),
-  });
+  }));
 }
