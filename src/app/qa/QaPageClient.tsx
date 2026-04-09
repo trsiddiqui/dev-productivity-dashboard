@@ -10,6 +10,7 @@ import { SearchableSelect, type Option } from '../components/SearchableSelect';
 import { useUserRuntimeSettings } from '../components/runtime-settings-client';
 import { areTestRailRuntimeSettingsComplete } from '@/lib/runtime-settings';
 import type {
+  GithubUser,
   QaCatalogResponse,
   QaCompareResponse,
   QaMetricDefinition,
@@ -76,16 +77,16 @@ function MetricCard(props: {
 function MetricBlueprint(props: { items: QaMetricDefinition[] }): JSX.Element {
   const { items } = props;
   return (
-    <div style={{ ...panelStyle, display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <ShieldCheck size={18} />
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>How this QA view measures productivity</div>
-          <div style={{ color: 'var(--panel-muted)', fontSize: 14 }}>
-            The page balances activity, efficiency, outcomes, and risk instead of treating raw execution count as the whole story.
-          </div>
-        </div>
-      </div>
+          <div style={{ ...panelStyle, display: 'grid', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShieldCheck size={18} />
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>How this QA view measures productivity</div>
+                <div style={{ color: 'var(--panel-muted)', fontSize: 14 }}>
+            The page blends TestRail execution evidence with GitHub automation delivery, engineering, and coverage signals instead of treating raw execution count as the whole story.
+                </div>
+              </div>
+            </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         {items.map((item) => (
           <div key={item.id} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 14, padding: 14 }}>
@@ -110,6 +111,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
   const [projectId, setProjectId] = useState('');
   const [leftUserId, setLeftUserId] = useState('');
   const [rightUserId, setRightUserId] = useState('');
+  const [leftGithubLogin, setLeftGithubLogin] = useState('');
+  const [rightGithubLogin, setRightGithubLogin] = useState('');
   const [catalog, setCatalog] = useState<QaCatalogResponse | null>(null);
   const [compare, setCompare] = useState<QaCompareResponse | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
@@ -128,6 +131,14 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       value: String(user.id),
       label: user.name,
       subtitle: user.email,
+    }))
+  ), [catalog]);
+
+  const githubUserOptions: Option[] = useMemo(() => (
+    (catalog?.githubUsers ?? []).map((user: GithubUser) => ({
+      value: user.login,
+      label: user.login,
+      subtitle: user.name,
     }))
   ), [catalog]);
 
@@ -167,7 +178,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
           projects: current?.projects ?? json.projects,
           statuses: json.statuses,
           users: json.users,
-          warnings: json.warnings,
+          githubUsers: current?.githubUsers?.length ? current.githubUsers : json.githubUsers,
+          warnings: Array.from(new Set([...(current?.warnings ?? []), ...(json.warnings ?? [])])),
         }));
         setLeftUserId((current) => current || (json.users[0] ? String(json.users[0].id) : ''));
         setRightUserId((current) => current || (json.users[1] ? String(json.users[1].id) : ''));
@@ -194,6 +206,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       url.searchParams.set('to', to);
       url.searchParams.set('leftUserId', leftUserId);
       url.searchParams.set('rightUserId', rightUserId);
+      if (leftGithubLogin) url.searchParams.set('leftGithubLogin', leftGithubLogin);
+      if (rightGithubLogin) url.searchParams.set('rightGithubLogin', rightGithubLogin);
       const resp = await fetch(url.toString());
       if (!resp.ok) throw new Error(await resp.text());
       const json: QaCompareResponse = await resp.json();
@@ -214,7 +228,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
         <div style={{ fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>QA Comparison</div>
         <h1 style={{ fontSize: 34, lineHeight: 1.08, fontWeight: 700 }}>QA resource performance</h1>
         <p style={{ maxWidth: 860, color: 'var(--panel-muted)', lineHeight: 1.6 }}>
-          Compare two TestRail QA resources on execution throughput, outcome mix, elapsed effort, defect linkage, comments, and run ownership. This first version intentionally emphasizes signals that TestRail captures directly instead of guessing at productivity from a single raw count.
+          Compare two QA resources on TestRail execution outcomes and GitHub automation delivery. TestRail stays the source of execution evidence, while GitHub adds automation PR, test asset, framework, and coverage-breadth signals from aligncommerce/test-engineering1.
         </p>
       </div>
 
@@ -288,7 +302,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 <div style={{ color: 'var(--panel-muted)', fontSize: 14 }}>Pick one TestRail project, one shared date window, and two QA resources.</div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1.2fr 1.2fr 220px', gap: 12, alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(220px, 1fr))', gap: 12, alignItems: 'end' }}>
               <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>TestRail project</label>
                 <SearchableSelect
@@ -298,6 +312,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     setProjectId(value);
                     setLeftUserId('');
                     setRightUserId('');
+                    setLeftGithubLogin('');
+                    setRightGithubLogin('');
                     setCompare(null);
                   }}
                   placeholder="Select project…"
@@ -325,6 +341,32 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 />
               </div>
               <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Primary GitHub user</label>
+                <SearchableSelect
+                  items={githubUserOptions}
+                  value={leftGithubLogin}
+                  onChange={(value) => {
+                    setLeftGithubLogin(value);
+                    setCompare(null);
+                  }}
+                  placeholder="Select GitHub user…"
+                  disabled={loadingCatalog}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comparison GitHub user</label>
+                <SearchableSelect
+                  items={githubUserOptions}
+                  value={rightGithubLogin}
+                  onChange={(value) => {
+                    setRightGithubLogin(value);
+                    setCompare(null);
+                  }}
+                  placeholder="Select GitHub user…"
+                  disabled={loadingCatalog}
+                />
+              </div>
+              <div>
                 <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Date range</label>
                 <DateRangePicker
                   from={from}
@@ -336,6 +378,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 />
               </div>
               <div>
+                <div style={{ fontSize: 12, marginBottom: 4, color: 'transparent' }}>Run</div>
                 <button
                   type="button"
                   onClick={() => { void runCompare(); }}
@@ -359,6 +402,9 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
             {(catalog?.warnings?.length ?? 0) > 0 && (
               <div style={{ color: '#fbbf24', fontSize: 13 }}>{catalog?.warnings?.join(' ')}</div>
             )}
+            <div style={{ color: 'var(--panel-muted)', fontSize: 13 }}>
+              Map each QA resource to a GitHub user if you want automation metrics from `aligncommerce/test-engineering1`. The TestRail comparison still works without that mapping.
+            </div>
           </div>
 
           {error && (
@@ -376,6 +422,29 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 <MetricCard title="Failure pressure" leftLabel={leftName} rightLabel={rightName} leftValue={formatPercent(compare.left.failurePressureRate)} rightValue={formatPercent(compare.right.failurePressureRate)} helper="Failed + retest share, useful for spotting unstable or defect-heavy work." />
                 <MetricCard title="Average elapsed" leftLabel={leftName} rightLabel={rightName} leftValue={formatDuration(compare.left.avgElapsedSeconds)} rightValue={formatDuration(compare.right.avgElapsedSeconds)} helper="Average reported execution effort from TestRail elapsed fields." />
                 <MetricCard title="Defects linked" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.defectsLinked)} rightValue={formatNumber(compare.right.defectsLinked)} helper="Number of defect IDs linked across the selected tester’s result entries." />
+              </div>
+
+              {(compare.warnings?.length ?? 0) > 0 && (
+                <div style={{ ...panelStyle, borderColor: '#854d0e', color: '#fde68a', background: 'color-mix(in srgb, #854d0e 20%, var(--panel-bg))' }}>
+                  {compare.warnings?.join(' ')}
+                </div>
+              )}
+
+              <div style={{ ...panelStyle, display: 'grid', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>GitHub automation delivery</div>
+                  <div style={{ color: 'var(--panel-muted)', fontSize: 14, marginTop: 6 }}>
+                    Signals are pulled from merged PRs to `main` in `aligncommerce/test-engineering1`, with file-level classification for test assets and shared automation engineering work.
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+                  <MetricCard title="Automation PRs merged" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.mergedPrs ?? null)} rightValue={formatNumber(compare.right.github?.mergedPrs ?? null)} helper="Merged PRs to main in the QA automation repository." />
+                  <MetricCard title="Test assets changed" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.testAssetFilesChanged ?? null)} rightValue={formatNumber(compare.right.github?.testAssetFilesChanged ?? null)} helper="Changed test code, feature files, and TestNG suites across merged automation PRs." />
+                  <MetricCard title="Median LOC / PR" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.medianLocChangedPerPr ?? null)} rightValue={formatNumber(compare.right.github?.medianLocChangedPerPr ?? null)} helper="Median additions + deletions per PR, limited to matched test asset files." />
+                  <MetricCard title="Median files / PR" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.medianFilesChangedPerPr ?? null)} rightValue={formatNumber(compare.right.github?.medianFilesChangedPerPr ?? null)} helper="Median number of matched test files changed in each merged PR." />
+                  <MetricCard title="Automation engineering" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.engineeringFilesChanged ?? null)} rightValue={formatNumber(compare.right.github?.engineeringFilesChanged ?? null)} helper="Shared harness, framework, CI, and config files changed under src/main/java and build surfaces." />
+                  <MetricCard title="Feature coverage breadth" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.github?.featureCoverageBreadth ?? null)} rightValue={formatNumber(compare.right.github?.featureCoverageBreadth ?? null)} helper="Distinct product or test areas touched across feature files and test code." />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1.6fr) minmax(320px, 1fr)', gap: 14 }}>
@@ -432,6 +501,14 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Owned completed runs</div>
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.left.completedOwnedRuns}</div>
                     </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub mapping</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, wordBreak: 'break-word' }}>{compare.left.github?.login ?? '—'}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub test LOC</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatNumber(compare.left.github?.totalLocChanged ?? null)}</div>
+                    </div>
                   </div>
                 </div>
                 <div style={{ ...panelStyle, display: 'grid', gap: 12 }}>
@@ -452,6 +529,14 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Owned completed runs</div>
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.right.completedOwnedRuns}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub mapping</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, wordBreak: 'break-word' }}>{compare.right.github?.login ?? '—'}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub test LOC</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatNumber(compare.right.github?.totalLocChanged ?? null)}</div>
                     </div>
                   </div>
                 </div>

@@ -1,12 +1,19 @@
 import { eachDayOfInterval, formatISO } from 'date-fns';
 import type {
   QaDailyPoint,
+  QaGithubAutomationSummary,
   QaMetricDefinition,
   QaStatusBreakdownItem,
   QaSummary,
   TestRailStatusLite,
   TestRailUserLite,
 } from './types';
+import {
+  getGithubPRsWithStats,
+  getGithubPullRequestFiles,
+  QA_AUTOMATION_BASE_BRANCH,
+  QA_AUTOMATION_REPO,
+} from './github';
 import {
   getTestRailCandidateRuns,
   getTestRailResultsForRun,
@@ -71,6 +78,48 @@ const QA_METRIC_DEFINITIONS: QaMetricDefinition[] = [
     description: 'Operational ownership of runs, not just execution entries.',
     derivation: 'Runs assigned to or created by the tester, plus completed owned runs.',
   },
+  {
+    id: 'automation-prs-merged',
+    name: 'Automation PRs merged',
+    category: 'Delivery',
+    description: 'Merged automation PRs to main in aligncommerce/test-engineering1 during the selected window.',
+    derivation: 'Count of authored PRs merged to main in the QA automation repo.',
+  },
+  {
+    id: 'test-assets-changed',
+    name: 'Test assets changed',
+    category: 'Coverage',
+    description: 'Changed files under test code, feature files, and TestNG suite definitions.',
+    derivation: 'Count of changed files matching src/test/java, src/test/features, cucumber feature roots, or testng*.xml.',
+  },
+  {
+    id: 'median-loc-per-pr',
+    name: 'Median LOC per PR',
+    category: 'Efficiency',
+    description: 'Typical size of automation changes, measured only on test asset files.',
+    derivation: 'Median per-PR additions + deletions across matched test asset files.',
+  },
+  {
+    id: 'median-files-per-pr',
+    name: 'Median files per PR',
+    category: 'Efficiency',
+    description: 'Typical number of changed test files per merged automation PR.',
+    derivation: 'Median count of matched test asset files changed per PR.',
+  },
+  {
+    id: 'automation-engineering',
+    name: 'Automation engineering',
+    category: 'Engineering',
+    description: 'Framework, CI/config, and shared harness work in the automation repo.',
+    derivation: 'Count of changed files under src/main/java plus CI/build/config surfaces like Gradle and .gitlab-ci.yml.',
+  },
+  {
+    id: 'feature-coverage-breadth',
+    name: 'Feature coverage breadth',
+    category: 'Coverage',
+    description: 'Distinct product or test areas touched across automation changes.',
+    derivation: 'Distinct area buckets derived from test file and feature file paths in merged PRs.',
+  },
 ];
 
 interface MutableQaSummary extends QaSummary {
@@ -104,6 +153,7 @@ function buildEmptySummary(user: TestRailUserLite): MutableQaSummary {
     runsAssigned: 0,
     runsCreated: 0,
     completedOwnedRuns: 0,
+    github: null,
     _uniqueTests: new Set<number>(),
     _runsTouched: new Set<number>(),
     _activeDays: new Set<string>(),
@@ -167,6 +217,145 @@ function finalizeSummary(summary: MutableQaSummary): QaSummary {
     runsAssigned: summary.runsAssigned,
     runsCreated: summary.runsCreated,
     completedOwnedRuns: summary.completedOwnedRuns,
+    github: summary.github,
+  };
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/^\/+/, '');
+}
+
+function isTestAssetPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return normalized.startsWith('src/test/java/')
+    || normalized.startsWith('src/test/features/')
+    || normalized.startsWith('src/test/java/cucumberTests/features/')
+    || /^testng.*\.xml$/i.test(normalized);
+}
+
+function isEngineeringPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return normalized.startsWith('src/main/java/pageFactoryNew/')
+    || normalized.startsWith('src/main/java/apiClient/')
+    || normalized.startsWith('src/main/java/apiClientConfigs/')
+    || normalized.startsWith('src/main/java/apiService/')
+    || normalized.startsWith('src/main/java/utils/')
+    || normalized.startsWith('src/main/java/TERA/config/')
+    || normalized.startsWith('src/main/java/cucumberTests/stepDefinitions/')
+    || /^src\/main\/java\/TERA\/[^/]+\/(services|factory)\//.test(normalized)
+    || normalized === '.gitlab-ci.yml'
+    || normalized === 'build.gradle'
+    || normalized === 'settings.gradle'
+    || normalized === 'gradle.properties'
+    || normalized === 'app.properties'
+    || normalized === 'gradlew'
+    || normalized === 'gradlew.bat'
+    || normalized.startsWith('gradle/');
+}
+
+function getFeatureArea(path: string): string | null {
+  const normalized = normalizePath(path);
+
+  if (normalized.startsWith('src/test/features/')) {
+    const rest = normalized.slice('src/test/features/'.length);
+    const area = rest.split('/')[0];
+    return area || null;
+  }
+
+  if (normalized.startsWith('src/test/java/cucumberTests/features/')) {
+    const rest = normalized.slice('src/test/java/cucumberTests/features/'.length);
+    const area = rest.split('/')[0];
+    return area || null;
+  }
+
+  if (normalized.startsWith('src/test/java/TERA/')) {
+    const parts = normalized.slice('src/test/java/TERA/'.length).split('/').filter(Boolean);
+    if (parts.length === 0) return null;
+    if ((parts[0] === 'api' || parts[0] === 'contract') && parts[1]) {
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return parts[0];
+  }
+
+  return null;
+}
+
+async function computeGithubAutomationSummary(params: {
+  login: string;
+  from: string;
+  to: string;
+}): Promise<QaGithubAutomationSummary> {
+  const prs = await getGithubPRsWithStats({
+    login: params.login,
+    from: params.from,
+    to: params.to,
+    repo: QA_AUTOMATION_REPO,
+    baseBranch: QA_AUTOMATION_BASE_BRANCH,
+    mergedOnly: true,
+    dateField: 'merged',
+  });
+
+  if (prs.length === 0) {
+    return {
+      login: params.login,
+      mergedPrs: 0,
+      testAssetFilesChanged: 0,
+      totalLocChanged: 0,
+      medianLocChangedPerPr: null,
+      medianFilesChangedPerPr: null,
+      engineeringFilesChanged: 0,
+      featureCoverageBreadth: 0,
+    };
+  }
+
+  const filesByPr = await mapWithConcurrency(prs, 5, (pr) => getGithubPullRequestFiles({
+    owner: pr.repository.owner,
+    repo: pr.repository.name,
+    number: pr.number,
+  }));
+
+  let testAssetFilesChanged = 0;
+  let totalLocChanged = 0;
+  let engineeringFilesChanged = 0;
+  const featureAreas = new Set<string>();
+  const locPerPr: number[] = [];
+  const filesPerPr: number[] = [];
+
+  filesByPr.forEach((files) => {
+    let prLocChanged = 0;
+    let prTestFilesChanged = 0;
+
+    for (const file of files) {
+      const filePath = file.filename;
+      if (isTestAssetPath(filePath)) {
+        const locChanged = file.additions + file.deletions;
+        prLocChanged += locChanged;
+        prTestFilesChanged += 1;
+        testAssetFilesChanged += 1;
+        totalLocChanged += locChanged;
+
+        const featureArea = getFeatureArea(filePath);
+        if (featureArea) featureAreas.add(featureArea);
+      }
+
+      if (isEngineeringPath(filePath)) {
+        engineeringFilesChanged += 1;
+      }
+    }
+
+    locPerPr.push(prLocChanged);
+    filesPerPr.push(prTestFilesChanged);
+  });
+
+  return {
+    login: params.login,
+    mergedPrs: prs.length,
+    testAssetFilesChanged,
+    totalLocChanged,
+    medianLocChangedPerPr: median(locPerPr),
+    medianFilesChangedPerPr: median(filesPerPr),
+    engineeringFilesChanged,
+    featureCoverageBreadth: featureAreas.size,
   };
 }
 
@@ -207,16 +396,20 @@ export async function computeQaComparison(params: {
   leftUser: TestRailUserLite;
   rightUser: TestRailUserLite;
   statuses: TestRailStatusLite[];
+  leftGithubLogin?: string | null;
+  rightGithubLogin?: string | null;
 }): Promise<{
   left: QaSummary;
   right: QaSummary;
   daily: QaDailyPoint[];
   statusBreakdown: QaStatusBreakdownItem[];
   metricDefinitions: QaMetricDefinition[];
+  warnings?: string[];
 }> {
-  const { projectId, from, to, leftUser, rightUser, statuses } = params;
+  const { projectId, from, to, leftUser, rightUser, statuses, leftGithubLogin, rightGithubLogin } = params;
   const fromTimestamp = Math.floor(new Date(`${from}T00:00:00Z`).getTime() / 1000);
   const toTimestamp = Math.floor(new Date(`${to}T23:59:59Z`).getTime() / 1000);
+  const warnings: string[] = [];
   const candidateRuns = await getTestRailCandidateRuns({ projectId, fromTimestamp, toTimestamp });
 
   const left = buildEmptySummary(leftUser);
@@ -304,11 +497,28 @@ export async function computeQaComparison(params: {
   const statusBreakdown = Array.from(statusBreakdownMap.values())
     .sort((leftItem, rightItem) => (rightItem.leftCount + rightItem.rightCount) - (leftItem.leftCount + leftItem.rightCount));
 
+  if (!leftGithubLogin || !rightGithubLogin) {
+    warnings.push('Select the corresponding GitHub users to unlock automation metrics from aligncommerce/test-engineering1.');
+  }
+
+  const [leftGithubSummary, rightGithubSummary] = await Promise.all([
+    leftGithubLogin
+      ? computeGithubAutomationSummary({ login: leftGithubLogin, from, to })
+      : Promise.resolve(null),
+    rightGithubLogin
+      ? computeGithubAutomationSummary({ login: rightGithubLogin, from, to })
+      : Promise.resolve(null),
+  ]);
+
+  left.github = leftGithubSummary;
+  right.github = rightGithubSummary;
+
   return {
     left: finalizeSummary(left),
     right: finalizeSummary(right),
     daily,
     statusBreakdown,
     metricDefinitions: QA_METRIC_DEFINITIONS,
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
 }
