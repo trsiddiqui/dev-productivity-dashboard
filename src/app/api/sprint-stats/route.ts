@@ -20,6 +20,7 @@ import type {
 import { eachDayOfInterval, formatISO } from 'date-fns';
 import { requireAuthOr401 } from '@/lib/auth';
 import { cfg } from '@/lib/config'; // NEW
+import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,8 +54,7 @@ function avgVelocity(series: number[], window = 5): number {
   return n ? sum / n : 0;
 }
 
-export async function GET(req: Request) {
-  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+async function getSprintStatsResponse(req: Request): Promise<Response> {
   const warnings: string[] = [];
 
   try {
@@ -385,4 +385,14 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : 'Internal error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+  return withCachedRouteResponse({
+    req,
+    authUser: auth,
+    namespace: 'sprint-stats',
+    handler: () => getSprintStatsResponse(req),
+  });
 }

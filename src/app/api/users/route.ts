@@ -7,14 +7,13 @@ import type {
   JiraUserLite,
 } from '../../../lib/types';
 import { requireAuthOr401 } from '@/lib/auth';
+import { withCachedRouteResponse } from '@/lib/route-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
-  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+async function getUsersResponse(): Promise<Response> {
   const warnings: string[] = [];
-
 
   let github: GithubUser[] = [];
   let jira: JiraUserLite[] = [];
@@ -42,4 +41,14 @@ export async function GET(req: Request) {
   };
 
   return NextResponse.json(payload);
+}
+
+export async function GET(req: Request) {
+  const auth = await requireAuthOr401(req); if (auth instanceof Response) return auth;
+  return withCachedRouteResponse({
+    req,
+    authUser: auth,
+    namespace: 'users',
+    handler: getUsersResponse,
+  });
 }
