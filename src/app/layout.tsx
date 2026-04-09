@@ -13,6 +13,7 @@ import { COOKIE_NAME, verifyToken } from "@/lib/auth";
 import {
   DEFAULT_JIRA_BASE_URL,
   DEFAULT_JIRA_STORY_POINTS_FIELD,
+  RUNTIME_QA_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_STORAGE_PREFIX,
 } from "@/lib/runtime-settings";
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         var raw = localStorage.getItem(${JSON.stringify(`${RUNTIME_SETTINGS_STORAGE_PREFIX}:`)} + username);
         if(!raw){
           document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
+          document.cookie = ${JSON.stringify(RUNTIME_QA_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
           return;
         }
         var parsed = JSON.parse(raw) || {};
@@ -57,9 +59,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         var complete = !!(normalized.githubToken && normalized.githubOrg && normalized.jiraBaseUrl && normalized.jiraEmail && normalized.jiraToken && normalized.jiraStoryPointsField);
         if(!complete){
           document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
+          document.cookie = ${JSON.stringify(RUNTIME_QA_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
           return;
         }
-        document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=' + encodeURIComponent(JSON.stringify(normalized)) + '; Path=/; Max-Age=31536000; SameSite=Lax';
+        var coreCookiePayload = {
+          username: normalized.username,
+          githubToken: normalized.githubToken,
+          githubOrg: normalized.githubOrg,
+          jiraBaseUrl: normalized.jiraBaseUrl,
+          jiraEmail: normalized.jiraEmail,
+          jiraToken: normalized.jiraToken,
+          jiraStoryPointsField: normalized.jiraStoryPointsField
+        };
+        document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=' + encodeURIComponent(JSON.stringify(coreCookiePayload)) + '; Path=/; Max-Age=31536000; SameSite=Lax';
+        var qaComplete = !!(normalized.testRailBaseUrl && normalized.testRailEmail && normalized.testRailToken);
+        if(qaComplete){
+          var qaCookiePayload = {
+            username: normalized.username,
+            testRailBaseUrl: normalized.testRailBaseUrl,
+            testRailEmail: normalized.testRailEmail,
+            testRailToken: normalized.testRailToken
+          };
+          document.cookie = ${JSON.stringify(RUNTIME_QA_SETTINGS_COOKIE_NAME)} + '=' + encodeURIComponent(JSON.stringify(qaCookiePayload)) + '; Path=/; Max-Age=31536000; SameSite=Lax';
+        }else{
+          document.cookie = ${JSON.stringify(RUNTIME_QA_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
+        }
       }catch(e){}
     })();`
     : '';

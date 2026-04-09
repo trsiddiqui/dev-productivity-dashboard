@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   areCoreRuntimeSettingsComplete,
-  parseStoredRuntimeSettings,
+  parseStoredCoreRuntimeSettings,
   RUNTIME_SETTINGS_COOKIE_NAME,
 } from './src/lib/runtime-settings';
 
@@ -49,7 +49,7 @@ export async function middleware(req: NextRequest) {
   const runtimeSettingsCookie = req.cookies.get(RUNTIME_SETTINGS_COOKIE_NAME)?.value ?? null;
   const ok = await verifyToken(token);
   const username = ok && token ? token.slice(0, token.lastIndexOf('|')) : null;
-  const storedSettings = parseStoredRuntimeSettings(runtimeSettingsCookie);
+  const storedSettings = parseStoredCoreRuntimeSettings(runtimeSettingsCookie);
   const settingsReady = !!username
     && !!storedSettings
     && storedSettings.username === username
