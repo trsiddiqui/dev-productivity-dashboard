@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { NextResponse } from 'next/server';
+import { getRuntimeSettingsFingerprintForRequest } from './config';
 
 const ROUTE_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -39,7 +40,8 @@ function normalizeRequestTarget(req: Request): string {
 }
 
 function buildCacheKey(req: Request, authUser: string, namespace: string): string {
-  return ['dpd', 'route-cache', 'v1', namespace, authUser, normalizeRequestTarget(req)].join(':');
+  const settingsFingerprint = getRuntimeSettingsFingerprintForRequest(req, authUser);
+  return ['dpd', 'route-cache', 'v2', namespace, authUser, settingsFingerprint, normalizeRequestTarget(req)].join(':');
 }
 
 function shouldCachePayload(payload: unknown): boolean {

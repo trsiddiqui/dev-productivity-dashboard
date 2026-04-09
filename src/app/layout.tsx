@@ -5,9 +5,17 @@ import "react-day-picker/style.css";
 import "./globals.css";
 import ThemeSelect from "./components/ThemeSelect";
 import LogoutButton from "./components/LogoutButton";
+import RuntimeSettingsStatus from "./components/RuntimeSettingsStatus";
+import SettingsAccessGate from "./components/SettingsAccessGate";
 
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifyToken } from "@/lib/auth";
+import {
+  DEFAULT_JIRA_BASE_URL,
+  DEFAULT_JIRA_STORY_POINTS_FIELD,
+  RUNTIME_SETTINGS_COOKIE_NAME,
+  RUNTIME_SETTINGS_STORAGE_PREFIX,
+} from "@/lib/runtime-settings";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -23,6 +31,35 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const token = (await cookies()).get(COOKIE_NAME)?.value ?? null;
   const user = await verifyToken(token);
   const authed = !!user;
+  const runtimeSettingsBootstrapScript = authed ? `
+    (function(){
+      try{
+        var username = ${JSON.stringify(user)};
+        if(!username) return;
+        var raw = localStorage.getItem(${JSON.stringify(`${RUNTIME_SETTINGS_STORAGE_PREFIX}:`)} + username);
+        if(!raw){
+          document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
+          return;
+        }
+        var parsed = JSON.parse(raw) || {};
+        var normalized = {
+          username: username,
+          githubToken: typeof parsed.githubToken === 'string' ? parsed.githubToken.trim() : '',
+          githubOrg: typeof parsed.githubOrg === 'string' ? parsed.githubOrg.trim() : '',
+          jiraBaseUrl: typeof parsed.jiraBaseUrl === 'string' && parsed.jiraBaseUrl.trim() ? parsed.jiraBaseUrl.trim() : ${JSON.stringify(DEFAULT_JIRA_BASE_URL)},
+          jiraEmail: typeof parsed.jiraEmail === 'string' ? parsed.jiraEmail.trim() : '',
+          jiraToken: typeof parsed.jiraToken === 'string' ? parsed.jiraToken.trim() : '',
+          jiraStoryPointsField: typeof parsed.jiraStoryPointsField === 'string' && parsed.jiraStoryPointsField.trim() ? parsed.jiraStoryPointsField.trim() : ${JSON.stringify(DEFAULT_JIRA_STORY_POINTS_FIELD)}
+        };
+        var complete = !!(normalized.githubToken && normalized.githubOrg && normalized.jiraBaseUrl && normalized.jiraEmail && normalized.jiraToken && normalized.jiraStoryPointsField);
+        if(!complete){
+          document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=; Path=/; Max-Age=0; SameSite=Lax';
+          return;
+        }
+        document.cookie = ${JSON.stringify(RUNTIME_SETTINGS_COOKIE_NAME)} + '=' + encodeURIComponent(JSON.stringify(normalized)) + '; Path=/; Max-Age=31536000; SameSite=Lax';
+      }catch(e){}
+    })();`
+    : '';
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -40,20 +77,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               })();`,
           }}
         />
+        {authed && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: runtimeSettingsBootstrapScript,
+            }}
+          />
+        )}
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {authed && (
-          <nav className="app-nav">
-            <div className="brand">Dev Productivity Dashboard</div>
-            <Link href="/individual">Individual</Link>
-            <Link href="/contributions">Contributions</Link>
-            <Link href="/sprint">Sprint</Link>
-            <div className="spacer" />
-            <LogoutButton />
-            <ThemeSelect />
-          </nav>
-        )}
-        <main style={{ width: "100%" }}>{children}</main>
+        <SettingsAccessGate username={user ?? ''}>
+          {authed && (
+            <nav className="app-nav">
+              <div className="brand">Dev Productivity Dashboard</div>
+              <Link href="/individual">Individual</Link>
+              <Link href="/contributions">Contributions</Link>
+              <Link href="/sprint">Sprint</Link>
+              <Link href="/settings">Settings</Link>
+              <div className="spacer" />
+              <RuntimeSettingsStatus username={user ?? ''} />
+              <LogoutButton />
+              <ThemeSelect />
+            </nav>
+          )}
+          <main style={{ width: "100%" }}>{children}</main>
+        </SettingsAccessGate>
       </body>
     </html>
   );
