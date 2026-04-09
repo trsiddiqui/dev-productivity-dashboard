@@ -39,28 +39,15 @@ export default function ThemeSelect() {
   const icon = theme === 'dark' ? <Moon size={16} aria-hidden /> : theme === 'grey' ? <Cloud size={16} aria-hidden /> : <Sun size={16} aria-hidden />;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-      <span style={{ fontSize: 12, color: 'var(--faint-text)' }}>Theme</span>
+    <div className="app-header-theme">
+      <span className="app-header-theme__label">Theme</span>
       <button
         onClick={toggle}
         aria-label={`Switch theme (current: ${theme})`}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          border: '1px solid var(--surface-border)',
-          background: 'var(--surface)',
-          color: 'var(--foreground)',
-          borderRadius: 999,
-          padding: '6px 10px',
-          lineHeight: 1,
-          cursor: 'pointer',
-          transition: 'background .15s, color .15s',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-        }}
+        className="app-header-icon-button"
       >
         {icon}
-        <span style={{ fontSize: 12 }}>{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
+        <span className="app-header-theme__value">{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
       </button>
     </div>
   );

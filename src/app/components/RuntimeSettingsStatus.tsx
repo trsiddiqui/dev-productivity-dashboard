@@ -6,18 +6,6 @@ import { useState, type CSSProperties, type JSX } from 'react';
 import { maskSecret } from '@/lib/runtime-settings';
 import { useUserRuntimeSettings } from './runtime-settings-client';
 
-const triggerStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 12px',
-  borderRadius: 999,
-  border: '1px solid var(--surface-border)',
-  background: 'color-mix(in srgb, var(--surface) 84%, transparent)',
-  color: 'var(--surface-link)',
-  cursor: 'pointer',
-};
-
 const dialogCardStyle: CSSProperties = {
   width: 'min(560px, calc(100vw - 32px))',
   borderRadius: 18,
@@ -58,16 +46,16 @@ export default function RuntimeSettingsStatus(props: { username: string }): JSX.
       <button
         type="button"
         onClick={() => setOpen(true)}
-        style={triggerStyle}
+        className="app-header-chip app-header-chip--button"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
         <Settings2 size={16} />
-        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72 }}>
+        <span className="app-header-chip__stack">
+          <span className="app-header-chip__eyebrow">
             Connection
           </span>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>
+          <span className="app-header-chip__value">
             {ready && configured ? jiraEmailLabel : 'Using browser settings'}
           </span>
         </span>

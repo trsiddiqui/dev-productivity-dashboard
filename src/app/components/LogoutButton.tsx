@@ -8,7 +8,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handle}
-      style={{ border: '1px solid var(--surface-border)', background: 'transparent', color: 'var(--surface-link)', borderRadius: 8, padding: '6px 10px' }}
+      className="app-header-icon-button"
     >
       Logout
     </button>
