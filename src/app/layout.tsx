@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
 import "react-day-picker/style.css";
 import "./globals.css";
-import ThemeSelect from "./components/ThemeSelect";
-import LogoutButton from "./components/LogoutButton";
-import RuntimeSettingsStatus from "./components/RuntimeSettingsStatus";
 import SettingsAccessGate from "./components/SettingsAccessGate";
+import AppHeader from "./components/AppHeader";
 
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifyToken } from "@/lib/auth";
@@ -91,18 +88,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <SettingsAccessGate username={user ?? ''}>
           {authed && (
-            <nav className="app-nav">
-              <div className="brand">Dev Productivity Dashboard</div>
-              <Link href="/individual">Individual</Link>
-              <Link href="/contributions">Contributions</Link>
-              <Link href="/sprint">Sprint</Link>
-              <Link href="/qa">QA</Link>
-              <Link href="/settings">Settings</Link>
-              <div className="spacer" />
-              <RuntimeSettingsStatus username={user ?? ''} />
-              <LogoutButton />
-              <ThemeSelect />
-            </nav>
+            <AppHeader username={user ?? ''} />
           )}
           <main style={{ width: "100%" }}>{children}</main>
         </SettingsAccessGate>
