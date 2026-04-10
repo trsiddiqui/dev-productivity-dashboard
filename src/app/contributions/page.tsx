@@ -4,6 +4,11 @@ import type { CSSProperties, JSX } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import type { ContributionGapMode, ContributionResponse, GithubUser, UsersResponse } from '@/lib/types';
+import {
+  computeAdjustedContributionResponse,
+  createDefaultContributionPrAdjustments,
+  type ContributionPrAdjustmentMap,
+} from '@/lib/contributions';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { SearchableSelect, type Option } from '../components/SearchableSelect';
 import { useContributionProfileSections } from '../components/ContributionProfile';
@@ -19,6 +24,19 @@ interface ComparisonColumnState {
   login: string;
   from: string;
   to: string;
+}
+
+function updatePrAdjustments(
+  current: ContributionPrAdjustmentMap,
+  prId: string,
+  updater: (existing: ContributionPrAdjustmentMap[string]) => ContributionPrAdjustmentMap[string],
+): ContributionPrAdjustmentMap {
+  const existing = current[prId];
+  if (!existing) return current;
+  return {
+    ...current,
+    [prId]: updater(existing),
+  };
 }
 
 const defaultFrom = formatISO(subDays(new Date(), 14), { representation: 'date' });
@@ -91,22 +109,38 @@ function buildProfileTitle(params: {
 function AlignedContributionProfiles(props: {
   primaryData: ContributionResponse;
   secondaryData: ContributionResponse;
+  primaryAllPrs: ContributionResponse['prs'];
+  secondaryAllPrs: ContributionResponse['prs'];
   comparisonMode: ComparisonMode;
   gapMode: ContributionGapMode;
   leftHideDeveloperName: boolean;
   rightHideDeveloperName: boolean;
   leftMaskIdentity: boolean;
   rightMaskIdentity: boolean;
+  leftPrAdjustments: ContributionPrAdjustmentMap;
+  rightPrAdjustments: ContributionPrAdjustmentMap;
+  onToggleLeftPrSelected: (prId: string) => void;
+  onToggleRightPrSelected: (prId: string) => void;
+  onLeftPrAdjustmentChange: (prId: string, field: 'additions' | 'deletions', value: number) => void;
+  onRightPrAdjustmentChange: (prId: string, field: 'additions' | 'deletions', value: number) => void;
 }): JSX.Element {
   const {
     primaryData,
     secondaryData,
+    primaryAllPrs,
+    secondaryAllPrs,
     comparisonMode,
     gapMode,
     leftHideDeveloperName,
     rightHideDeveloperName,
     leftMaskIdentity,
     rightMaskIdentity,
+    leftPrAdjustments,
+    rightPrAdjustments,
+    onToggleLeftPrSelected,
+    onToggleRightPrSelected,
+    onLeftPrAdjustmentChange,
+    onRightPrAdjustmentChange,
   } = props;
 
   const primarySections = useContributionProfileSections({
@@ -121,6 +155,10 @@ function AlignedContributionProfiles(props: {
     }),
     gapMode,
     maskIdentity: leftMaskIdentity,
+    allPrs: primaryAllPrs,
+    prAdjustments: leftPrAdjustments,
+    onTogglePrSelected: onToggleLeftPrSelected,
+    onPrAdjustmentChange: onLeftPrAdjustmentChange,
   });
   const secondarySections = useContributionProfileSections({
     data: secondaryData,
@@ -134,6 +172,10 @@ function AlignedContributionProfiles(props: {
     }),
     gapMode,
     maskIdentity: rightMaskIdentity,
+    allPrs: secondaryAllPrs,
+    prAdjustments: rightPrAdjustments,
+    onTogglePrSelected: onToggleRightPrSelected,
+    onPrAdjustmentChange: onRightPrAdjustmentChange,
   });
 
   const sectionIds = Array.from(new Set([
@@ -182,6 +224,8 @@ export default function ContributionsPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [primaryData, setPrimaryData] = useState<ContributionResponse | null>(null);
   const [secondaryData, setSecondaryData] = useState<ContributionResponse | null>(null);
+  const [leftPrAdjustments, setLeftPrAdjustments] = useState<ContributionPrAdjustmentMap>({});
+  const [rightPrAdjustments, setRightPrAdjustments] = useState<ContributionPrAdjustmentMap>({});
 
   useEffect(() => {
     (async () => {
@@ -211,6 +255,14 @@ export default function ContributionsPage(): JSX.Element {
     if (dateMode === 'merged') setMergedOnly(true);
   }, [dateMode]);
 
+  useEffect(() => {
+    setLeftPrAdjustments(primaryData ? createDefaultContributionPrAdjustments(primaryData.prs) : {});
+  }, [primaryData]);
+
+  useEffect(() => {
+    setRightPrAdjustments(secondaryData ? createDefaultContributionPrAdjustments(secondaryData.prs) : {});
+  }, [secondaryData]);
+
   const ghOptions: Option[] = useMemo(
     () => (users?.github ?? []).map((user: GithubUser) => ({
       value: user.login,
@@ -231,6 +283,32 @@ export default function ContributionsPage(): JSX.Element {
   const rightMaskIdentity = maskedColumn === 'right';
   const leftHideDeveloperName = hideSharedDeveloperIdentity || leftMaskIdentity;
   const rightHideDeveloperName = hideSharedDeveloperIdentity || rightMaskIdentity;
+
+  const effectivePrimaryData = useMemo(
+    () => (primaryData ? computeAdjustedContributionResponse(primaryData, leftPrAdjustments) : null),
+    [primaryData, leftPrAdjustments],
+  );
+
+  const effectiveSecondaryData = useMemo(
+    () => (secondaryData ? computeAdjustedContributionResponse(secondaryData, rightPrAdjustments) : null),
+    [secondaryData, rightPrAdjustments],
+  );
+
+  function togglePrSelected(column: ColumnKey, prId: string): void {
+    const setter = column === 'left' ? setLeftPrAdjustments : setRightPrAdjustments;
+    setter((current) => updatePrAdjustments(current, prId, (existing) => ({
+      ...existing,
+      selected: !existing.selected,
+    })));
+  }
+
+  function changePrAdjustment(column: ColumnKey, prId: string, field: 'additions' | 'deletions', value: number): void {
+    const setter = column === 'left' ? setLeftPrAdjustments : setRightPrAdjustments;
+    setter((current) => updatePrAdjustments(current, prId, (existing) => ({
+      ...existing,
+      [field]: value,
+    })));
+  }
 
   async function fetchContribution(selection: ComparisonColumnState): Promise<ContributionResponse> {
     const url = new URL('/api/contributions', window.location.origin);
@@ -291,96 +369,96 @@ export default function ContributionsPage(): JSX.Element {
   }
 
   const comparisonSignals: ContributionSignalDatum[] = useMemo(() => {
-    if (!primaryData || !secondaryData) return [];
+    if (!effectivePrimaryData || !effectiveSecondaryData) return [];
     return [
       {
         metric: 'Tracked-base PRs',
         section: 'Delivery',
-        primary: primaryData.kpis.totalPRs,
-        secondary: secondaryData.kpis.totalPRs,
+        primary: effectivePrimaryData.kpis.totalPRs,
+        secondary: effectiveSecondaryData.kpis.totalPRs,
         format: 'count',
       },
       {
         metric: 'LOC changed',
         section: 'Delivery',
-        primary: primaryData.kpis.totalLocChanged,
-        secondary: secondaryData.kpis.totalLocChanged,
+        primary: effectivePrimaryData.kpis.totalLocChanged,
+        secondary: effectiveSecondaryData.kpis.totalLocChanged,
         format: 'loc',
       },
       {
         metric: 'Touched ticket story points',
         section: 'Delivery',
-        primary: primaryData.kpis.touchedTicketStoryPoints,
-        secondary: secondaryData.kpis.touchedTicketStoryPoints,
+        primary: effectivePrimaryData.kpis.touchedTicketStoryPoints,
+        secondary: effectiveSecondaryData.kpis.touchedTicketStoryPoints,
         format: 'count',
       },
       {
         metric: 'Active days',
         section: 'Cadence',
-        primary: primaryData.kpis.activeDays,
-        secondary: secondaryData.kpis.activeDays,
+        primary: effectivePrimaryData.kpis.activeDays,
+        secondary: effectiveSecondaryData.kpis.activeDays,
         format: 'count',
       },
       {
         metric: 'Active day rate',
         section: 'Cadence',
-        primary: primaryData.kpis.activeDayRate,
-        secondary: secondaryData.kpis.activeDayRate,
+        primary: effectivePrimaryData.kpis.activeDayRate,
+        secondary: effectiveSecondaryData.kpis.activeDayRate,
         format: 'percent',
       },
       {
         metric: 'PRs reviewed',
         section: 'Reviews',
-        primary: primaryData.reviews.given.reviewedPRs,
-        secondary: secondaryData.reviews.given.reviewedPRs,
+        primary: effectivePrimaryData.reviews.given.reviewedPRs,
+        secondary: effectiveSecondaryData.reviews.given.reviewedPRs,
         format: 'count',
       },
       {
         metric: 'Comments given',
         section: 'Reviews',
-        primary: primaryData.reviews.given.reviewComments,
-        secondary: secondaryData.reviews.given.reviewComments,
+        primary: effectivePrimaryData.reviews.given.reviewComments,
+        secondary: effectiveSecondaryData.reviews.given.reviewComments,
         format: 'count',
       },
       {
         metric: 'Own PRs reviewed',
         section: 'Reviews',
-        primary: primaryData.reviews.received.reviewedPRs,
-        secondary: secondaryData.reviews.received.reviewedPRs,
+        primary: effectivePrimaryData.reviews.received.reviewedPRs,
+        secondary: effectiveSecondaryData.reviews.received.reviewedPRs,
         format: 'count',
       },
       {
         metric: 'Comments received',
         section: 'Reviews',
-        primary: primaryData.reviews.received.reviewComments,
-        secondary: secondaryData.reviews.received.reviewComments,
+        primary: effectivePrimaryData.reviews.received.reviewComments,
+        secondary: effectiveSecondaryData.reviews.received.reviewComments,
         format: 'count',
       },
       {
         metric: 'Median issue cycle',
         section: 'Flow',
-        primary: primaryData.issueCycle.medianCycleTimeHours ?? 0,
-        secondary: secondaryData.issueCycle.medianCycleTimeHours ?? 0,
+        primary: effectivePrimaryData.issueCycle.medianCycleTimeHours ?? 0,
+        secondary: effectiveSecondaryData.issueCycle.medianCycleTimeHours ?? 0,
         format: 'hours',
         lowerIsBetter: true,
       },
       {
         metric: 'Longest idle gap',
         section: 'Flow',
-        primary: primaryData.kpis.longestIdleGapDays,
-        secondary: secondaryData.kpis.longestIdleGapDays,
+        primary: effectivePrimaryData.kpis.longestIdleGapDays,
+        secondary: effectiveSecondaryData.kpis.longestIdleGapDays,
         format: 'days',
         lowerIsBetter: true,
       },
       {
         metric: 'LOC per active day',
         section: 'Flow',
-        primary: primaryData.kpis.avgLocPerActiveDay,
-        secondary: secondaryData.kpis.avgLocPerActiveDay,
+        primary: effectivePrimaryData.kpis.avgLocPerActiveDay,
+        secondary: effectiveSecondaryData.kpis.avgLocPerActiveDay,
         format: 'loc',
       },
     ];
-  }, [primaryData, secondaryData]);
+  }, [effectivePrimaryData, effectiveSecondaryData]);
 
   const warnings = useMemo(
     () => Array.from(new Set([
@@ -699,7 +777,7 @@ export default function ContributionsPage(): JSX.Element {
         </div>
       )}
 
-      {primaryData && secondaryData && (
+      {effectivePrimaryData && effectiveSecondaryData && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
             {(['left', 'right'] as const).map((column) => {
@@ -751,7 +829,7 @@ export default function ContributionsPage(): JSX.Element {
               title={comparisonMode === 'developer' ? 'Comparison Overview' : 'Time-Window Overview'}
               subtitle={comparisonMode === 'developer'
                 ? 'A billboard view of delivery, review, cadence, and flow signals across the two selected profiles.'
-                : `Comparing ${rangeSummary(primaryData.from, primaryData.to)} against ${rangeSummary(secondaryData.from, secondaryData.to)} for the same developer, with each metric shown in its own card.`}
+                : `Comparing ${rangeSummary(effectivePrimaryData.from, effectivePrimaryData.to)} against ${rangeSummary(effectiveSecondaryData.from, effectiveSecondaryData.to)} for the same developer, with each metric shown in its own card.`}
               primaryLabel={primarySignalLabel}
               secondaryLabel={secondarySignalLabel}
               items={comparisonSignals}
@@ -759,14 +837,22 @@ export default function ContributionsPage(): JSX.Element {
           </div>
 
           <AlignedContributionProfiles
-            primaryData={primaryData}
-            secondaryData={secondaryData}
+            primaryData={effectivePrimaryData}
+            secondaryData={effectiveSecondaryData}
+            primaryAllPrs={primaryData?.prs ?? []}
+            secondaryAllPrs={secondaryData?.prs ?? []}
             comparisonMode={comparisonMode}
             gapMode={gapMode}
             leftHideDeveloperName={leftHideDeveloperName}
             rightHideDeveloperName={rightHideDeveloperName}
             leftMaskIdentity={leftMaskIdentity}
             rightMaskIdentity={rightMaskIdentity}
+            leftPrAdjustments={leftPrAdjustments}
+            rightPrAdjustments={rightPrAdjustments}
+            onToggleLeftPrSelected={(prId) => togglePrSelected('left', prId)}
+            onToggleRightPrSelected={(prId) => togglePrSelected('right', prId)}
+            onLeftPrAdjustmentChange={(prId, field, value) => changePrAdjustment('left', prId, field, value)}
+            onRightPrAdjustmentChange={(prId, field, value) => changePrAdjustment('right', prId, field, value)}
           />
         </>
       )}
