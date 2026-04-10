@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+.playwright-cli/
+testing/generated/
+testing/output/
+tmp/*.generated.js
 
 # debug
 npm-debug.log*

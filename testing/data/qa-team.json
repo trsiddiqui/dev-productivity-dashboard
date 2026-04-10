@@ -1,0 +1,43 @@
+{
+  "defaultProject": "VeemTestEngineeringV26",
+  "members": [
+    {
+      "alias": "harsha",
+      "name": "Harsha Harikumar",
+      "email": "harsha.harikumar@veem.com",
+      "githubLogin": "hharikumarveem"
+    },
+    {
+      "alias": "shanthi",
+      "name": "Shanthi Neela",
+      "email": "shanthi.neela@veem.com",
+      "githubLogin": "shanthineela"
+    },
+    {
+      "alias": "asmita",
+      "name": "Asmita Surse",
+      "email": "asmita.surse@veem.com",
+      "githubLogin": "asmitafulsagar"
+    },
+    {
+      "alias": "adeel",
+      "name": "adeel",
+      "email": "adeel.akram@veem.com",
+      "githubLogin": "adeelakramveem"
+    }
+  ],
+  "defaultComparisons": [
+    {
+      "alias": "harsha-vs-shanthi",
+      "slug": "harsha-vs-shanthi",
+      "leftQaAlias": "harsha",
+      "rightQaAlias": "shanthi"
+    },
+    {
+      "alias": "adeel-vs-asmita",
+      "slug": "adeel-vs-asmita",
+      "leftQaAlias": "adeel",
+      "rightQaAlias": "asmita"
+    }
+  ]
+}

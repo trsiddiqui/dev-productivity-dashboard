@@ -13,6 +13,7 @@ import {
   RUNTIME_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_STORAGE_PREFIX,
 } from "@/lib/runtime-settings";
+import { DEFAULT_THEME, THEME_IDS } from "@/lib/theme";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -70,8 +71,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               (function(){
                 try{
                   var t = localStorage.getItem('theme');
-                  if(t === 'light' || t === 'dark'){
+                  if(${JSON.stringify(THEME_IDS)}.includes(t)){
                     document.documentElement.setAttribute('data-theme', t);
+                  }else{
+                    document.documentElement.setAttribute('data-theme', ${JSON.stringify(DEFAULT_THEME)});
                   }
                 }catch(e){}
               })();`,

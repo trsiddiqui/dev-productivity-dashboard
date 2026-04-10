@@ -31,9 +31,9 @@ const sourceLabel: Record<ContributionIssueLinkSource, string> = {
 };
 
 const sourceStyle: Record<ContributionIssueLinkSource, { background: string; color: string; border: string }> = {
-  'dev-status': { background: 'rgba(59, 130, 246, 0.16)', color: '#93c5fd', border: 'rgba(59, 130, 246, 0.28)' },
-  'pr-metadata': { background: 'rgba(34, 197, 94, 0.16)', color: '#86efac', border: 'rgba(34, 197, 94, 0.28)' },
-  'commit-metadata': { background: 'rgba(245, 158, 11, 0.16)', color: '#fcd34d', border: 'rgba(245, 158, 11, 0.28)' },
+  'dev-status': { background: 'var(--accent-primary-soft)', color: 'var(--accent-primary-text)', border: 'var(--accent-primary-border)' },
+  'pr-metadata': { background: 'var(--accent-success-soft)', color: 'var(--panel-fg)', border: 'var(--accent-success-border)' },
+  'commit-metadata': { background: 'var(--accent-secondary-soft)', color: 'var(--accent-secondary-text)', border: 'var(--accent-secondary-border)' },
 };
 
 function metricValue(value: number | null, suffix = ''): string {
@@ -270,16 +270,16 @@ function ReviewSummaryGroup(props: {
 }): JSX.Element {
   const accent = props.tone === 'blue'
     ? {
-      bg: 'rgba(96,165,250,0.12)',
-      border: 'rgba(96,165,250,0.20)',
-      text: '#dbeafe',
-      muted: '#bfdbfe',
+      bg: 'color-mix(in srgb, var(--accent-primary-soft) 86%, transparent)',
+      border: 'var(--accent-primary-border)',
+      text: 'var(--accent-primary-text)',
+      muted: 'var(--accent-primary-text)',
     }
     : {
-      bg: 'rgba(245,158,11,0.12)',
-      border: 'rgba(245,158,11,0.20)',
-      text: '#ffedd5',
-      muted: '#fde68a',
+      bg: 'color-mix(in srgb, var(--accent-secondary-soft) 86%, transparent)',
+      border: 'var(--accent-secondary-border)',
+      text: 'var(--accent-secondary-text)',
+      muted: 'var(--accent-secondary-text)',
     };
 
   return (
@@ -289,13 +289,13 @@ function ReviewSummaryGroup(props: {
         <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>{props.subtitle}</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.18)' }}>
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'color-mix(in srgb, var(--panel-bg) 78%, var(--background))' }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent.muted, fontWeight: 700 }}>
             {props.emphasisLabel}
           </div>
           <div style={{ marginTop: 6, fontSize: 28, fontWeight: 800 }}>{props.emphasisValue}</div>
         </div>
-        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.18)' }}>
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'color-mix(in srgb, var(--panel-bg) 78%, var(--background))' }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent.muted, fontWeight: 700 }}>
             {props.secondaryLabel}
           </div>
@@ -418,10 +418,10 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
   ];
 
   const prCycleItems: ContributionMetricBarItem[] = [
-    { label: 'First commit -> merge', value: data.prCycle.medianFirstCommitToMergeHours ?? 0, fill: '#60a5fa' },
-    { label: 'Coding window', value: data.prCycle.medianCodingHours ?? 0, fill: '#22c55e' },
-    { label: 'Last commit -> review', value: data.prCycle.medianLastCommitToReviewHours ?? 0, fill: '#f59e0b' },
-    { label: 'Review -> merge', value: data.prCycle.medianReviewToMergeHours ?? 0, fill: '#ef4444' },
+    { label: 'First commit -> merge', value: data.prCycle.medianFirstCommitToMergeHours ?? 0, fill: 'var(--accent-primary-strong)' },
+    { label: 'Coding window', value: data.prCycle.medianCodingHours ?? 0, fill: 'var(--accent-success)' },
+    { label: 'Last commit -> review', value: data.prCycle.medianLastCommitToReviewHours ?? 0, fill: 'var(--accent-secondary-strong)' },
+    { label: 'Review -> merge', value: data.prCycle.medianReviewToMergeHours ?? 0, fill: 'var(--accent-danger)' },
   ];
 
   const jiraPrTimingItems: ContributionMetricBarItem[] = [
@@ -429,13 +429,13 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
       label: 'Time Spent in Coding',
       subtitle: data.jiraPrTiming.codingSampleSize > 0 ? `${data.jiraPrTiming.codingSampleSize} PRs` : undefined,
       value: data.jiraPrTiming.avgCodingHours ?? 0,
-      fill: '#38bdf8',
+      fill: 'var(--accent-primary-strong)',
     },
     {
       label: 'Cycle Time',
       subtitle: data.jiraPrTiming.cycleSampleSize > 0 ? `${data.jiraPrTiming.cycleSampleSize} tickets` : undefined,
       value: data.jiraPrTiming.avgCycleTimeHours ?? 0,
-      fill: '#34d399',
+      fill: 'var(--accent-success)',
     },
   ];
 
@@ -446,7 +446,7 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
       issue.storyPoints !== undefined ? `${issue.storyPoints} SP` : null,
     ].filter(Boolean).join(' - '),
     value: cycleHours,
-    fill: '#a855f7',
+    fill: 'var(--accent-primary-strong)',
   }));
 
   const repoItems = useMemo(
@@ -484,7 +484,7 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
             <code>Touched Ticket SP</code> sums unique Jira story points where a dev PR was opened or a commit referenced the ticket during this window, using Jira dev-status links where available and rolling linked subtasks up to their parent ticket points.
           </p>
           {maskIdentity ? (
-            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 10, background: 'rgba(15,23,42,0.28)', color: '#cbd5f5', fontSize: 12, fontWeight: 600 }}>
+            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--accent-primary-soft)', color: 'var(--accent-primary-text)', border: '1px solid var(--accent-primary-border)', fontSize: 12, fontWeight: 600 }}>
               Identity masking is on. Developer names, PR references, ticket references, and repo labels are hidden in the detailed sections below.
             </div>
           ) : null}
@@ -666,12 +666,12 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
               <button
                 type="button"
                 onClick={() => setSelectedLinkSource(null)}
-                style={{
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  border: `1px solid ${selectedLinkSource ? 'var(--panel-br)' : 'rgba(255,255,255,0.18)'}`,
-                  background: selectedLinkSource ? 'transparent' : 'rgba(148, 163, 184, 0.18)',
-                  color: 'var(--panel-fg)',
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    border: `1px solid ${selectedLinkSource ? 'var(--panel-br)' : 'rgba(255,255,255,0.18)'}`,
+                    background: selectedLinkSource ? 'transparent' : 'color-mix(in srgb, var(--panel-muted) 20%, transparent)',
+                    color: 'var(--panel-fg)',
                   fontSize: 11,
                   fontWeight: 600,
                   cursor: 'pointer',

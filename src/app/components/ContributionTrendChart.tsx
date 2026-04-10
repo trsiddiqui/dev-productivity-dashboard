@@ -36,13 +36,14 @@ interface TooltipProps {
 }
 
 const palette = {
-  loc: '#60a5fa',
-  prs: '#22c55e',
-  additions: '#22c55e',
-  deletions: '#ef4444',
-  grid: '#334155',
-  axis: '#94a3b8',
-  weekend: 'rgba(120,120,120,0.20)',
+  loc: 'var(--accent-primary-strong)',
+  prs: 'var(--accent-success)',
+  additions: 'var(--accent-success)',
+  deletions: 'var(--accent-danger)',
+  grid: 'var(--chart-grid)',
+  axis: 'var(--chart-axis)',
+  weekend: 'var(--chart-weekend-fill)',
+  weekendStroke: 'var(--chart-weekend-stroke)',
 };
 
 function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | null {
@@ -112,7 +113,7 @@ export function ContributionTrendChart({ items, title, subtitle }: Props): JSX.E
                 y1={0}
                 y2={Math.max(1, Math.ceil(maxLoc * 1.1))}
                 fill={palette.weekend}
-                stroke="rgba(120,120,120,0.35)"
+                stroke={palette.weekendStroke}
                 strokeOpacity={0.7}
                 ifOverflow="hidden"
               />

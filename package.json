@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "capture:dev": "node testing/run-capture.mjs dev",
+    "capture:qa": "node testing/run-capture.mjs qa"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",

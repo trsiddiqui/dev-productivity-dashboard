@@ -61,11 +61,11 @@ export function RepoContributionChart({ items }: Props): JSX.Element {
       <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, left: 24, bottom: 8 }}>
-            <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
-            <XAxis type="number" stroke="#94a3b8" allowDecimals={false} />
-            <YAxis type="category" dataKey="repo" stroke="#94a3b8" width={120} />
+            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+            <XAxis type="number" stroke="var(--chart-axis)" allowDecimals={false} />
+            <YAxis type="category" dataKey="repo" stroke="var(--chart-axis)" width={120} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="locChanged" name="LOC changed" fill="#a855f7" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="locChanged" name="LOC changed" fill="var(--accent-primary-strong)" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

@@ -8,6 +8,23 @@ type CacheStatus = 'BYPASS' | 'HIT' | 'MISS';
 
 let redis: Redis | null | undefined;
 
+interface MemoryCacheEntry {
+  value: unknown;
+  expiresAt: number;
+}
+
+type MemoryCacheStore = Map<string, MemoryCacheEntry>;
+
+const memoryCacheStore = (() => {
+  const globalScope = globalThis as typeof globalThis & {
+    __dpdRouteCacheStore?: MemoryCacheStore;
+  };
+  if (!globalScope.__dpdRouteCacheStore) {
+    globalScope.__dpdRouteCacheStore = new Map<string, MemoryCacheEntry>();
+  }
+  return globalScope.__dpdRouteCacheStore;
+})();
+
 function resolveRedisConfig(): { url: string; token: string } | null {
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_KV_REST_API_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_KV_REST_API_TOKEN;
@@ -22,6 +39,10 @@ function getRedis(): Redis | null {
   const config = resolveRedisConfig();
   redis = config ? new Redis(config) : null;
   return redis;
+}
+
+function getMemoryCache(): MemoryCacheStore | null {
+  return process.env.NODE_ENV === 'production' ? null : memoryCacheStore;
 }
 
 function normalizeRequestTarget(req: Request): string {
@@ -79,22 +100,32 @@ export async function withCachedRouteResponse(params: {
 }): Promise<Response> {
   const { req, authUser, namespace, handler, cacheIf = shouldCachePayload } = params;
   const client = getRedis();
-
-  if (!client) {
-    return withCacheHeaders(await handler(), 'BYPASS');
-  }
+  const memoryCache = client ? null : getMemoryCache();
 
   const requestTarget = normalizeRequestTarget(req);
   const cacheKey = buildCacheKey(req, authUser, namespace);
 
-  try {
-    const cached = await client.get(cacheKey);
-    if (cached !== null) {
-      console.info(`[route-cache] HIT ${namespace} ${requestTarget}`);
-      return withCacheHeaders(NextResponse.json(cached), 'HIT');
+  if (client) {
+    try {
+      const cached = await client.get(cacheKey);
+      if (cached !== null) {
+        console.info(`[route-cache] HIT ${namespace} ${requestTarget}`);
+        return withCacheHeaders(NextResponse.json(cached), 'HIT');
+      }
+    } catch (error) {
+      console.error(`[route-cache] Read failed for ${namespace}`, error);
     }
-  } catch (error) {
-    console.error(`[route-cache] Read failed for ${namespace}`, error);
+  } else if (memoryCache) {
+    const cached = memoryCache.get(cacheKey);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) {
+        console.info(`[route-cache] HIT ${namespace} ${requestTarget} (memory)`);
+        return withCacheHeaders(NextResponse.json(cached.value), 'HIT');
+      }
+      memoryCache.delete(cacheKey);
+    }
+  } else {
+    return withCacheHeaders(await handler(), 'BYPASS');
   }
 
   const response = await handler();
@@ -108,9 +139,22 @@ export async function withCachedRouteResponse(params: {
   }
 
   try {
-    await client.set(cacheKey, payload, { ex: ROUTE_CACHE_TTL_SECONDS });
-    console.info(`[route-cache] MISS ${namespace} ${requestTarget}`);
-    return withCacheHeaders(response, 'MISS');
+    if (client) {
+      await client.set(cacheKey, payload, { ex: ROUTE_CACHE_TTL_SECONDS });
+      console.info(`[route-cache] MISS ${namespace} ${requestTarget}`);
+      return withCacheHeaders(response, 'MISS');
+    }
+
+    if (memoryCache) {
+      memoryCache.set(cacheKey, {
+        value: payload,
+        expiresAt: Date.now() + (ROUTE_CACHE_TTL_SECONDS * 1000),
+      });
+      console.info(`[route-cache] MISS ${namespace} ${requestTarget} (memory)`);
+      return withCacheHeaders(response, 'MISS');
+    }
+
+    return withCacheHeaders(response, 'BYPASS');
   } catch (error) {
     console.error(`[route-cache] Write failed for ${namespace}`, error);
     return withCacheHeaders(response, 'BYPASS');
