@@ -7,6 +7,7 @@ import type {
   JiraIssue,
   PR,
 } from '@/lib/types';
+import type { ContributionPrAdjustmentMap } from '@/lib/contributions';
 import { JSX, useEffect, useMemo, useState } from 'react';
 import { ContributionMetricBars, type ContributionMetricBarItem } from './ContributionMetricBars';
 import { ContributionTrendChart } from './ContributionTrendChart';
@@ -17,6 +18,10 @@ interface Props {
   title?: string;
   gapMode: ContributionGapMode;
   maskIdentity?: boolean;
+  allPrs?: PR[];
+  prAdjustments?: ContributionPrAdjustmentMap;
+  onTogglePrSelected?: (prId: string) => void;
+  onPrAdjustmentChange?: (prId: string, field: 'additions' | 'deletions', value: number) => void;
 }
 
 export interface ContributionProfileSection {
@@ -312,8 +317,18 @@ function ReviewSummaryGroup(props: {
   );
 }
 
-export function useContributionProfileSections({ data, title, gapMode, maskIdentity = false }: Props): ContributionProfileSection[] {
+export function useContributionProfileSections({
+  data,
+  title,
+  gapMode,
+  maskIdentity = false,
+  allPrs,
+  prAdjustments,
+  onTogglePrSelected,
+  onPrAdjustmentChange,
+}: Props): ContributionProfileSection[] {
   const [selectedLinkSource, setSelectedLinkSource] = useState<ContributionIssueLinkSource | null>(null);
+  const [editingPrId, setEditingPrId] = useState<string | null>(null);
 
   const availableLinkSources = useMemo(
     () => Array.from(new Set(
@@ -329,14 +344,16 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
   }, [availableLinkSources, selectedLinkSource]);
 
   const topPRs = useMemo(
-    () => [...data.prs]
+    () => [...(allPrs ?? data.prs)]
       .sort((left, right) => {
-        const leftLoc = (left.additions ?? 0) + (left.deletions ?? 0);
-        const rightLoc = (right.additions ?? 0) + (right.deletions ?? 0);
+        const leftAdjustment = prAdjustments?.[left.id];
+        const rightAdjustment = prAdjustments?.[right.id];
+        const leftLoc = (leftAdjustment?.additions ?? left.additions ?? 0) + (leftAdjustment?.deletions ?? left.deletions ?? 0);
+        const rightLoc = (rightAdjustment?.additions ?? right.additions ?? 0) + (rightAdjustment?.deletions ?? right.deletions ?? 0);
         return rightLoc - leftLoc;
       })
       .slice(0, 6),
-    [data.prs],
+    [allPrs, data.prs, prAdjustments],
   );
 
   const slowestIssues = useMemo(
@@ -867,14 +884,30 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr>
+                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Use</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Date</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>PR</th>
                   <th style={{ textAlign: 'right', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>LOC</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Adjustments</th>
                 </tr>
               </thead>
               <tbody>
                 {topPRs.map((pr, index) => (
-                  <tr key={pr.id}>
+                  <tr
+                    key={pr.id}
+                    style={{
+                      opacity: (prAdjustments?.[pr.id]?.selected ?? true) ? 1 : 0.55,
+                    }}
+                  >
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', verticalAlign: 'top' }}>
+                      <input
+                        type="checkbox"
+                        checked={prAdjustments?.[pr.id]?.selected ?? true}
+                        onChange={() => onTogglePrSelected?.(pr.id)}
+                        aria-label={`Include PR #${pr.number}`}
+                        disabled={!onTogglePrSelected}
+                      />
+                    </td>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', whiteSpace: 'nowrap' }}>
                       <DateWithWeekday date={eventDate(pr, data.dateMode)} />
                     </td>
@@ -899,7 +932,62 @@ export function useContributionProfileSections({ data, title, gapMode, maskIdent
                       )}
                     </td>
                     <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {((pr.additions ?? 0) + (pr.deletions ?? 0)).toLocaleString()}
+                      {((prAdjustments?.[pr.id]?.additions ?? pr.additions ?? 0) + (prAdjustments?.[pr.id]?.deletions ?? pr.deletions ?? 0)).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', minWidth: 240 }}>
+                      {!onPrAdjustmentChange ? null : editingPrId === pr.id ? (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                              Additions
+                              <input
+                                type="number"
+                                min={0}
+                                value={prAdjustments?.[pr.id]?.additions ?? pr.additions ?? 0}
+                                onChange={(event) => onPrAdjustmentChange(pr.id, 'additions', Number(event.target.value) || 0)}
+                                style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
+                              />
+                            </label>
+                            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                              Deletions
+                              <input
+                                type="number"
+                                min={0}
+                                value={prAdjustments?.[pr.id]?.deletions ?? pr.deletions ?? 0}
+                                onChange={(event) => onPrAdjustmentChange(pr.id, 'deletions', Number(event.target.value) || 0)}
+                                style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
+                              />
+                            </label>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPrId(null)}
+                              style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                            >
+                              Done
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onPrAdjustmentChange(pr.id, 'additions', pr.additions ?? 0);
+                                onPrAdjustmentChange(pr.id, 'deletions', pr.deletions ?? 0);
+                              }}
+                              style={{ border: '1px solid var(--panel-br)', background: 'transparent', color: 'var(--panel-muted)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingPrId(pr.id)}
+                          style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                        >
+                          Adjust LOC
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

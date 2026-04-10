@@ -4,11 +4,13 @@ import type {
   ContributionDailyItem,
   ContributionJiraPRTimingSummary,
   ContributionIssueCycleSummary,
+  ContributionLinkedTicket,
   ContributionKpis,
   ContributionPRCycleSummary,
   ContributionRepoItem,
   ContributionReviewBucket,
   ContributionReviewSummary,
+  ContributionResponse,
   ContributionWipItem,
   JiraIssue,
   PR,
@@ -17,9 +19,38 @@ import type {
 type ContributionDateMode = 'created' | 'merged';
 const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 
+export interface ContributionPrAdjustment {
+  selected: boolean;
+  additions: number;
+  deletions: number;
+}
+
+export type ContributionPrAdjustmentMap = Record<string, ContributionPrAdjustment>;
+
 function eventDateForPR(pr: PR, dateMode: ContributionDateMode): string | null {
   const iso = dateMode === 'merged' ? pr.mergedAt : pr.createdAt;
   return iso ? iso.slice(0, 10) : null;
+}
+
+function normalizePullUrl(url?: string): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const apiMatch = parsed.hostname === 'api.github.com'
+      ? parsed.pathname.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)/i)
+      : null;
+    if (apiMatch) return `${apiMatch[1]}/${apiMatch[2]}#${apiMatch[3]}`;
+
+    const webMatch = parsed.hostname.endsWith('github.com')
+      ? parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/pulls?\/(\d+)/i)
+      : null;
+    if (webMatch) return `${webMatch[1]}/${webMatch[2]}#${webMatch[3]}`;
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function median(nums: number[]): number {
@@ -69,6 +100,102 @@ export function extractJiraKeysFromPRs(prs: PR[]): string[] {
   }
 
   return Array.from(found).sort((left, right) => left.localeCompare(right));
+}
+
+export function createDefaultContributionPrAdjustments(prs: PR[]): ContributionPrAdjustmentMap {
+  return Object.fromEntries(
+    prs.map((pr) => [pr.id, {
+      selected: true,
+      additions: pr.additions ?? 0,
+      deletions: pr.deletions ?? 0,
+    }]),
+  );
+}
+
+export function applyContributionPrAdjustments(
+  prs: PR[],
+  adjustments: ContributionPrAdjustmentMap,
+): PR[] {
+  return prs
+    .filter((pr) => adjustments[pr.id]?.selected ?? true)
+    .map((pr) => {
+      const adjustment = adjustments[pr.id];
+      if (!adjustment) return pr;
+      return {
+        ...pr,
+        additions: adjustment.additions,
+        deletions: adjustment.deletions,
+      };
+    });
+}
+
+function filterIssuesForContributionPrs(prs: PR[], issues: JiraIssue[]): JiraIssue[] {
+  const prRefs = new Set(prs.map((pr) => normalizePullUrl(pr.url)).filter((ref): ref is string => !!ref));
+  const jiraKeys = new Set(extractJiraKeysFromPRs(prs));
+
+  return issues.filter((issue) => (
+    jiraKeys.has(issue.key)
+    || (issue.linkedPRs ?? []).some((linkedPr) => {
+      const ref = normalizePullUrl(linkedPr.url);
+      return !!ref && prRefs.has(ref);
+    })
+  ));
+}
+
+function filterLinkedTicketsForIssues(
+  linkedTickets: ContributionLinkedTicket[],
+  issues: JiraIssue[],
+): ContributionLinkedTicket[] {
+  const issueKeys = new Set(issues.map((issue) => issue.key));
+  return linkedTickets.filter((ticket) => (
+    (ticket.sourceIssueKeys ?? [ticket.key]).some((issueKey) => issueKeys.has(issueKey))
+  ));
+}
+
+export function computeAdjustedContributionResponse(
+  data: ContributionResponse,
+  adjustments: ContributionPrAdjustmentMap,
+): ContributionResponse {
+  const prs = applyContributionPrAdjustments(data.prs, adjustments);
+  const issues = filterIssuesForContributionPrs(prs, data.issues);
+  const linkedTickets = filterLinkedTicketsForIssues(data.linkedTickets, issues);
+  const touchedTicketStoryPoints = linkedTickets.reduce((sum, ticket) => sum + (ticket.storyPoints ?? 0), 0);
+
+  return {
+    ...data,
+    prs,
+    issues,
+    linkedTickets,
+    kpis: computeContributionKpis({
+      from: data.from,
+      to: data.to,
+      prs,
+      dateMode: data.dateMode,
+      touchedTicketStoryPoints,
+    }),
+    daily: aggregateContributionDaily({
+      from: data.from,
+      to: data.to,
+      prs,
+      dateMode: data.dateMode,
+    }),
+    repos: summarizeRepoContributions(prs),
+    reviews: computeContributionReviewSummary({
+      given: {
+        totalReviews: data.reviews.given.totalReviews,
+        approvals: data.reviews.given.approvals,
+        changesRequested: data.reviews.given.changesRequested,
+        comments: data.reviews.given.comments,
+        reviewedPRs: data.reviews.given.reviewedPRs,
+        reviewComments: data.reviews.given.reviewComments,
+      },
+      received: prs,
+    }),
+    prCycle: computeContributionPRCycleSummary(prs),
+    jiraPrTiming: computeContributionJiraPRTimingSummary({ prs, issues }),
+    issueCycle: computeContributionIssueCycleSummary(issues),
+    wip: aggregateContributionWip({ from: data.from, to: data.to, prs, issues }),
+  };
 }
 
 export function aggregateContributionDaily(params: {
