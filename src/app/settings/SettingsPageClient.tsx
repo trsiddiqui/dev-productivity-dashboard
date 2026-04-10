@@ -58,6 +58,10 @@ function Field(props: {
   );
 }
 
+function nextPathRequiresTestRail(nextPath: string | null): boolean {
+  return !!nextPath && (nextPath === '/qa' || nextPath.startsWith('/qa?'));
+}
+
 export default function SettingsPageClient(props: { username: string }): JSX.Element {
   const { username } = props;
   const router = useRouter();
@@ -69,9 +73,14 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
   const nextPath = rawNextPath && rawNextPath.startsWith('/') && !rawNextPath.startsWith('//')
     ? rawNextPath
     : null;
+  const nextNeedsTestRail = nextPathRequiresTestRail(nextPath);
   const coreSettingsComplete = areCoreRuntimeSettingsComplete(form);
   const storedCoreSettingsComplete = areCoreRuntimeSettingsComplete(settings);
+  const storedTestRailSettingsComplete = areTestRailRuntimeSettingsComplete(settings);
   const testRailSettingsComplete = areTestRailRuntimeSettingsComplete(form);
+  const canNavigateToNext = nextNeedsTestRail
+    ? storedCoreSettingsComplete && storedTestRailSettingsComplete
+    : storedCoreSettingsComplete;
 
   useEffect(() => {
     if (!ready) return;
@@ -79,9 +88,9 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
   }, [ready, settings]);
 
   useEffect(() => {
-    if (!ready || !nextPath || !configured || !storedCoreSettingsComplete) return;
+    if (!ready || !nextPath || !configured || !canNavigateToNext) return;
     router.replace(nextPath);
-  }, [configured, nextPath, ready, router, storedCoreSettingsComplete]);
+  }, [canNavigateToNext, configured, nextPath, ready, router]);
 
   function updateField<K extends keyof RuntimeSettingsFields>(key: K, value: RuntimeSettingsFields[K]): void {
     setForm((current) => ({ ...current, [key]: value }));
@@ -92,7 +101,12 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
     event.preventDefault();
     const normalized = save(form);
     setForm(normalized);
-    if (areCoreRuntimeSettingsComplete(normalized) && nextPath) {
+    const normalizedCoreSettingsComplete = areCoreRuntimeSettingsComplete(normalized);
+    const normalizedTestRailSettingsComplete = areTestRailRuntimeSettingsComplete(normalized);
+    const normalizedCanNavigateToNext = nextNeedsTestRail
+      ? normalizedCoreSettingsComplete && normalizedTestRailSettingsComplete
+      : normalizedCoreSettingsComplete;
+    if (normalizedCanNavigateToNext && nextPath) {
       router.replace(nextPath);
       return;
     }
@@ -216,11 +230,13 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ color: 'var(--panel-muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>
+          <div style={{ color: 'var(--panel-muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>
               {coreSettingsComplete
                 ? (testRailSettingsComplete
                   ? 'Core dashboard fields and TestRail QA fields are filled. Saving will unlock the dashboard and QA page for this browser.'
-                  : 'Core dashboard fields are filled. TestRail fields remain optional until you want to use the QA page.')
+                  : (nextNeedsTestRail
+                    ? 'This return path needs TestRail too. Fill the three TestRail fields before this page can send you back to QA.'
+                    : 'Core dashboard fields are filled. TestRail fields remain optional until you want to use the QA page.'))
                 : 'GitHub and Jira fields are required before the dashboard will allow navigation beyond this page.'}
             </div>
             <button

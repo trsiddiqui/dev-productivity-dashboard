@@ -82,10 +82,10 @@ export function ContributionMetricBars({
 
     return (
       <g transform={`translate(${x},${y})`}>
-        <text x={0} y={0} dy={4} textAnchor="end" fill="#e2e8f0" fontSize={12}>
+        <text x={0} y={0} dy={4} textAnchor="end" fill="var(--panel-fg)" fontSize={12}>
           <tspan x={0}>{row?.label ?? String(payload?.value ?? '')}</tspan>
           {row?.subtitle ? (
-            <tspan x={0} dy={14} fontSize={11} fill="#94a3b8">
+            <tspan x={0} dy={14} fontSize={11} fill="var(--panel-muted)">
               {row.subtitle}
             </tspan>
           ) : null}
@@ -103,12 +103,12 @@ export function ContributionMetricBars({
       <div style={{ width: '100%', height: Math.max(220, rows.length * rowHeight) }}>
         <ResponsiveContainer>
           <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-            <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
-            <XAxis type="number" stroke="#94a3b8" />
+            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+            <XAxis type="number" stroke="var(--chart-axis)" />
             <YAxis
               type="category"
               dataKey="label"
-              stroke="#94a3b8"
+              stroke="var(--chart-axis)"
               width={hasSubtitles ? 190 : 140}
               interval={0}
               tick={<CategoryTick />}
@@ -116,7 +116,7 @@ export function ContributionMetricBars({
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>
               {rows.map((item) => (
-                <Cell key={item.label} fill={item.fill ?? '#60a5fa'} />
+                <Cell key={item.label} fill={item.fill ?? 'var(--accent-primary-strong)'} />
               ))}
             </Bar>
           </BarChart>

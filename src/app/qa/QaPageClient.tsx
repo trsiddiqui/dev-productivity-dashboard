@@ -388,7 +388,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     padding: '10px 12px',
                     borderRadius: 10,
                     border: 0,
-                    background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+                    background: 'var(--accent-primary-gradient)',
                     color: '#ffffff',
                     fontWeight: 700,
                     opacity: (loadingCompare || loadingCatalog) ? 0.7 : 1,
@@ -400,7 +400,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
               </div>
             </div>
             {(catalog?.warnings?.length ?? 0) > 0 && (
-              <div style={{ color: '#fbbf24', fontSize: 13 }}>{catalog?.warnings?.join(' ')}</div>
+              <div style={{ color: 'var(--accent-secondary-text)', fontSize: 13 }}>{catalog?.warnings?.join(' ')}</div>
             )}
             <div style={{ color: 'var(--panel-muted)', fontSize: 13 }}>
               Map each QA resource to a GitHub user if you want automation metrics from `aligncommerce/test-engineering1`. The TestRail comparison still works without that mapping.
@@ -408,7 +408,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
           </div>
 
           {error && (
-            <div style={{ ...panelStyle, borderColor: '#7f1d1d', color: '#fecaca', background: 'color-mix(in srgb, #7f1d1d 20%, var(--panel-bg))' }}>
+            <div style={{ ...panelStyle, borderColor: 'var(--accent-danger-border)', color: 'var(--panel-fg)', background: 'color-mix(in srgb, var(--accent-danger-soft) 92%, var(--panel-bg))' }}>
               {error}
             </div>
           )}
@@ -425,7 +425,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
               </div>
 
               {(compare.warnings?.length ?? 0) > 0 && (
-                <div style={{ ...panelStyle, borderColor: '#854d0e', color: '#fde68a', background: 'color-mix(in srgb, #854d0e 20%, var(--panel-bg))' }}>
+                <div style={{ ...panelStyle, borderColor: 'var(--accent-warning-border)', color: 'var(--panel-fg)', background: 'color-mix(in srgb, var(--accent-warning-soft) 92%, var(--panel-bg))' }}>
                   {compare.warnings?.join(' ')}
                 </div>
               )}
@@ -458,8 +458,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                       <YAxis stroke="var(--panel-muted)" tick={{ fill: 'var(--panel-muted)', fontSize: 12 }} allowDecimals={false} />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="leftResults" name={leftName} stroke="#60a5fa" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="rightResults" name={rightName} stroke="#f59e0b" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="leftResults" name={leftName} stroke="var(--accent-primary-strong)" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="rightResults" name={rightName} stroke="var(--accent-secondary-strong)" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -474,8 +474,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                       <YAxis stroke="var(--panel-muted)" tick={{ fill: 'var(--panel-muted)', fontSize: 12 }} allowDecimals={false} />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="leftCount" name={leftName} fill="#60a5fa" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="rightCount" name={rightName} fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="leftCount" name={leftName} fill="var(--accent-primary-strong)" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="rightCount" name={rightName} fill="var(--accent-secondary-strong)" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

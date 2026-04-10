@@ -28,11 +28,18 @@ function formatSignalValue(value: number, format: ContributionSignalDatum['forma
 }
 
 function compareTone(item: ContributionSignalDatum): {
+  background: string;
+  border: string;
   accent: string;
   text: string;
 } {
   if (item.primary === item.secondary) {
-    return { accent: '#94a3b8', text: 'Even' };
+    return {
+      background: 'color-mix(in srgb, var(--panel-muted) 18%, transparent)',
+      border: 'color-mix(in srgb, var(--panel-muted) 26%, transparent)',
+      accent: 'var(--panel-fg)',
+      text: 'Even',
+    };
   }
 
   const primaryWins = item.lowerIsBetter
@@ -40,8 +47,18 @@ function compareTone(item: ContributionSignalDatum): {
     : item.primary > item.secondary;
 
   return primaryWins
-    ? { accent: '#60a5fa', text: 'Primary ahead' }
-    : { accent: '#f59e0b', text: 'Comparison ahead' };
+    ? {
+      background: 'var(--accent-primary-soft)',
+      border: 'var(--accent-primary-border)',
+      accent: 'var(--accent-primary-text)',
+      text: 'Primary ahead',
+    }
+    : {
+      background: 'var(--accent-secondary-soft)',
+      border: 'var(--accent-secondary-border)',
+      accent: 'var(--accent-secondary-text)',
+      text: 'Comparison ahead',
+    };
 }
 
 export function ContributionSignalsChart({
@@ -65,12 +82,12 @@ export function ContributionSignalsChart({
           ) : null}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 220, padding: '12px 14px', borderRadius: 14, background: 'linear-gradient(135deg, rgba(96,165,250,0.16), rgba(37,99,235,0.12))', border: '1px solid rgba(96,165,250,0.26)' }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#bfdbfe', fontWeight: 700 }}>Primary</div>
+          <div style={{ minWidth: 220, padding: '12px 14px', borderRadius: 14, background: 'color-mix(in srgb, var(--accent-primary-soft) 92%, transparent)', border: '1px solid var(--accent-primary-border)' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-primary-text)', fontWeight: 700 }}>Primary</div>
             <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>{primaryLabel}</div>
           </div>
-          <div style={{ minWidth: 220, padding: '12px 14px', borderRadius: 14, background: 'linear-gradient(135deg, rgba(245,158,11,0.16), rgba(249,115,22,0.10))', border: '1px solid rgba(245,158,11,0.26)' }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fde68a', fontWeight: 700 }}>Comparison</div>
+          <div style={{ minWidth: 220, padding: '12px 14px', borderRadius: 14, background: 'color-mix(in srgb, var(--accent-secondary-soft) 92%, transparent)', border: '1px solid var(--accent-secondary-border)' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-secondary-text)', fontWeight: 700 }}>Comparison</div>
             <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>{secondaryLabel}</div>
           </div>
         </div>
@@ -106,21 +123,21 @@ export function ContributionSignalsChart({
                         <div>
                           <div style={{ fontSize: 15, fontWeight: 700 }}>{item.metric}</div>
                         </div>
-                        <div style={{ padding: '4px 8px', borderRadius: 999, background: `${tone.accent}1c`, color: tone.accent, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        <div style={{ padding: '4px 8px', borderRadius: 999, background: tone.background, border: `1px solid ${tone.border}`, color: tone.accent, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
                           {tone.text}
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-                        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(96,165,250,0.10)', border: '1px solid rgba(96,165,250,0.18)' }}>
-                          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bfdbfe', fontWeight: 700 }}>Primary</div>
-                          <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, color: '#dbeafe' }}>
+                        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'color-mix(in srgb, var(--accent-primary-soft) 88%, transparent)', border: '1px solid var(--accent-primary-border)' }}>
+                          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-primary-text)', fontWeight: 700 }}>Primary</div>
+                          <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, color: 'var(--panel-fg)' }}>
                             {formatSignalValue(item.primary, item.format)}
                           </div>
                         </div>
-                        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fde68a', fontWeight: 700 }}>Comparison</div>
-                          <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, color: '#ffedd5' }}>
+                        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'color-mix(in srgb, var(--accent-secondary-soft) 88%, transparent)', border: '1px solid var(--accent-secondary-border)' }}>
+                          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-secondary-text)', fontWeight: 700 }}>Comparison</div>
+                          <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, color: 'var(--panel-fg)' }}>
                             {formatSignalValue(item.secondary, item.format)}
                           </div>
                         </div>
@@ -132,8 +149,8 @@ export function ContributionSignalsChart({
                             <span>Primary</span>
                             <span>{formatSignalValue(item.primary, item.format)}</span>
                           </div>
-                          <div style={{ height: 8, borderRadius: 999, background: 'rgba(148,163,184,0.12)', overflow: 'hidden' }}>
-                            <div style={{ width: `${(item.primary / max) * 100}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #60a5fa, #2563eb)' }} />
+                          <div style={{ height: 8, borderRadius: 999, background: 'color-mix(in srgb, var(--panel-muted) 18%, transparent)', overflow: 'hidden' }}>
+                            <div style={{ width: `${(item.primary / max) * 100}%`, height: '100%', borderRadius: 999, background: 'var(--accent-primary-gradient)' }} />
                           </div>
                         </div>
                         <div>
@@ -141,8 +158,8 @@ export function ContributionSignalsChart({
                             <span>Comparison</span>
                             <span>{formatSignalValue(item.secondary, item.format)}</span>
                           </div>
-                          <div style={{ height: 8, borderRadius: 999, background: 'rgba(148,163,184,0.12)', overflow: 'hidden' }}>
-                            <div style={{ width: `${(item.secondary / max) * 100}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #f59e0b, #f97316)' }} />
+                          <div style={{ height: 8, borderRadius: 999, background: 'color-mix(in srgb, var(--panel-muted) 18%, transparent)', overflow: 'hidden' }}>
+                            <div style={{ width: `${(item.secondary / max) * 100}%`, height: '100%', borderRadius: 999, background: 'var(--accent-secondary-gradient)' }} />
                           </div>
                         </div>
                       </div>

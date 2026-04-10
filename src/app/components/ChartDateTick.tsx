@@ -19,7 +19,7 @@ interface AxisTickProps {
   color?: string;
 }
 
-export function DateAxisTick({ x = 0, y = 0, payload, color = '#94a3b8' }: AxisTickProps): JSX.Element {
+export function DateAxisTick({ x = 0, y = 0, payload, color = 'var(--chart-axis)' }: AxisTickProps): JSX.Element {
   const label = String(payload?.value ?? '');
   const weekday = weekdayFromYmd(label);
 

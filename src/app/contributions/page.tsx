@@ -514,8 +514,8 @@ export default function ContributionsPage(): JSX.Element {
               gap: 6,
               padding: 6,
               borderRadius: 999,
-              background: 'linear-gradient(135deg, rgba(96,165,250,0.16), rgba(245,158,11,0.16))',
-              border: '1px solid rgba(148,163,184,0.24)',
+              background: 'linear-gradient(135deg, var(--accent-primary-soft), var(--accent-secondary-soft))',
+              border: '1px solid color-mix(in srgb, var(--panel-muted) 24%, transparent)',
             }}
           >
             {([
@@ -532,11 +532,11 @@ export default function ContributionsPage(): JSX.Element {
                     padding: '10px 16px',
                     borderRadius: 999,
                     border: active ? '1px solid rgba(255,255,255,0.18)' : '1px solid transparent',
-                    background: active ? 'linear-gradient(135deg, #0f172a, #1d4ed8)' : 'transparent',
+                    background: active ? 'var(--accent-primary-gradient)' : 'transparent',
                     color: active ? '#fff' : 'var(--panel-fg)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    boxShadow: active ? '0 10px 24px rgba(15,23,42,0.28)' : 'none',
+                    boxShadow: active ? '0 10px 24px color-mix(in srgb, var(--accent-primary-strong) 26%, transparent)' : 'none',
                   }}
                 >
                   {mode.label}
@@ -602,7 +602,7 @@ export default function ContributionsPage(): JSX.Element {
                 padding: '10px 12px',
                 borderRadius: 10,
                 border: 0,
-                background: 'linear-gradient(135deg, #0f172a, #2563eb)',
+                background: 'var(--accent-primary-gradient)',
                 color: '#fff',
                 fontWeight: 700,
                 opacity: (loading || loadingUsers) ? 0.6 : 1,
@@ -624,7 +624,7 @@ export default function ContributionsPage(): JSX.Element {
               </div>
               <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{selectionPanelLabel('left', comparisonMode)}</h3>
             </div>
-            <div style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(59,130,246,0.14)', color: '#bfdbfe', fontSize: 12, fontWeight: 700 }}>
+            <div style={{ padding: '6px 10px', borderRadius: 999, background: 'var(--accent-primary-soft)', color: 'var(--accent-primary-text)', border: '1px solid var(--accent-primary-border)', fontSize: 12, fontWeight: 700 }}>
               {rangeSummary(leftColumn.from, leftColumn.to)}
             </div>
           </div>
@@ -656,7 +656,7 @@ export default function ContributionsPage(): JSX.Element {
               </div>
               <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{selectionPanelLabel('right', comparisonMode)}</h3>
             </div>
-            <div style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.14)', color: '#fde68a', fontSize: 12, fontWeight: 700 }}>
+            <div style={{ padding: '6px 10px', borderRadius: 999, background: 'var(--accent-secondary-soft)', color: 'var(--accent-secondary-text)', border: '1px solid var(--accent-secondary-border)', fontSize: 12, fontWeight: 700 }}>
               {rangeSummary(effectiveRightColumn.from, effectiveRightColumn.to)}
             </div>
           </div>
@@ -688,13 +688,13 @@ export default function ContributionsPage(): JSX.Element {
       </div>
 
       {warnings.length > 0 && (
-        <div style={{ padding: 12, background: '#fff7ed', color: '#7c2d12', borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ padding: 12, background: 'var(--accent-warning-soft)', color: 'var(--accent-secondary-text)', border: '1px solid var(--accent-warning-border)', borderRadius: 8, marginBottom: 16 }}>
           {warnings.map((warning) => <div key={warning}>{warning}</div>)}
         </div>
       )}
 
       {error && (
-        <div style={{ padding: 12, background: '#ffe4e6', color: '#7f1d1d', borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ padding: 12, background: 'var(--accent-danger-soft)', color: 'var(--panel-fg)', border: '1px solid var(--accent-danger-border)', borderRadius: 8, marginBottom: 16 }}>
           {error}
         </div>
       )}
@@ -723,8 +723,8 @@ export default function ContributionsPage(): JSX.Element {
                         borderRadius: 999,
                         border: active ? '1px solid rgba(15,23,42,0.45)' : '1px solid rgba(148,163,184,0.22)',
                         background: active
-                          ? 'linear-gradient(135deg, #111827, #334155)'
-                          : 'rgba(148,163,184,0.10)',
+                          ? 'var(--accent-primary-gradient)'
+                          : 'color-mix(in srgb, var(--panel-muted) 12%, transparent)',
                         color: active ? '#fff' : 'var(--panel-fg)',
                         fontWeight: 700,
                         cursor: 'pointer',
@@ -737,7 +737,7 @@ export default function ContributionsPage(): JSX.Element {
                     Hide the developer name plus PR, ticket, and repo identifiers on this side. Only one column can be masked at a time.
                   </p>
                   {comparisonMode === 'date' && maskedColumn !== null ? (
-                    <p style={{ marginTop: 8, fontSize: 12, color: '#bfdbfe' }}>
+                    <p style={{ marginTop: 8, fontSize: 12, color: 'var(--accent-primary-text)' }}>
                       Developer selectors on both sides are obfuscated because date comparison uses the same developer in each column.
                     </p>
                   ) : null}
