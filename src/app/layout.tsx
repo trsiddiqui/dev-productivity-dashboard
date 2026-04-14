@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifyToken } from "@/lib/auth";
 import {
   DEFAULT_JIRA_BASE_URL,
+  DEFAULT_JIRA_QA_ASSIGNEE_FIELD,
   DEFAULT_JIRA_STORY_POINTS_FIELD,
   RUNTIME_SETTINGS_COOKIE_NAME,
   RUNTIME_SETTINGS_STORAGE_PREFIX,
@@ -48,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           jiraEmail: typeof parsed.jiraEmail === 'string' ? parsed.jiraEmail.trim() : '',
           jiraToken: typeof parsed.jiraToken === 'string' ? parsed.jiraToken.trim() : '',
           jiraStoryPointsField: typeof parsed.jiraStoryPointsField === 'string' && parsed.jiraStoryPointsField.trim() ? parsed.jiraStoryPointsField.trim() : ${JSON.stringify(DEFAULT_JIRA_STORY_POINTS_FIELD)},
+          jiraQAAssigneeField: typeof parsed.jiraQAAssigneeField === 'string' && parsed.jiraQAAssigneeField.trim() ? parsed.jiraQAAssigneeField.trim() : ${JSON.stringify(DEFAULT_JIRA_QA_ASSIGNEE_FIELD)},
           testRailBaseUrl: typeof parsed.testRailBaseUrl === 'string' ? parsed.testRailBaseUrl.trim() : '',
           testRailEmail: typeof parsed.testRailEmail === 'string' ? parsed.testRailEmail.trim() : '',
           testRailToken: typeof parsed.testRailToken === 'string' ? parsed.testRailToken.trim() : ''

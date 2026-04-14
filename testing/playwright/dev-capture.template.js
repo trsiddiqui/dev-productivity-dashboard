@@ -75,6 +75,19 @@ async (page) => {
     await dialog.waitFor({ state: 'hidden', timeout: 10000 });
   }
 
+  async function waitForComparisonToSettle() {
+    await page.waitForFunction(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const compareButton = buttons.find((button) => {
+        const label = (button.textContent || '').trim();
+        return label === 'Fetch comparison' || label === 'Loading...';
+      });
+      if (!compareButton) return false;
+      const label = (compareButton.textContent || '').trim();
+      return label === 'Fetch comparison' && !compareButton.disabled;
+    }, { timeout: 300000 });
+  }
+
   const username = '__USERNAME__';
   const password = '__PASSWORD__';
   const settings = {
@@ -117,6 +130,7 @@ async (page) => {
   await page.getByText('Individual Contribution Dashboard').waitFor({ state: 'visible', timeout: 30000 });
   await page.getByRole('button', { name: 'Date Comparison' }).click();
   await page.waitForTimeout(500);
+  await waitForComparisonToSettle();
 
   const screenshots = [];
 
@@ -139,7 +153,8 @@ async (page) => {
         page.getByRole('button', { name: 'Fetch comparison' }).click(),
       ]);
 
-      await page.waitForTimeout(2500);
+      await waitForComparisonToSettle();
+      await page.waitForTimeout(500);
 
       const fileName = `${developer.login}-${leftRange.label}_vs_${rightRange.label}.png`;
       await page.screenshot({

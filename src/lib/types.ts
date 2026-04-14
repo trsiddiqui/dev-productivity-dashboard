@@ -260,7 +260,7 @@ export interface TestRailStatusLite {
 export interface QaMetricDefinition {
   id: string;
   name: string;
-  category: 'Activity' | 'Efficiency' | 'Outcomes' | 'Risk' | 'Delivery' | 'Coverage' | 'Engineering';
+  category: 'Activity' | 'Efficiency' | 'Outcomes' | 'Risk' | 'Delivery' | 'Coverage' | 'Engineering' | 'Complexity';
   description: string;
   derivation: string;
 }
@@ -274,6 +274,13 @@ export interface QaGithubAutomationSummary {
   medianFilesChangedPerPr: number | null;
   engineeringFilesChanged: number;
   featureCoverageBreadth: number;
+}
+
+export interface QaJiraAssignmentSummary {
+  accountId: string;
+  displayName: string;
+  assignedTicketCount: number;
+  assignedStoryPoints: number;
 }
 
 export interface QaSummary {
@@ -299,6 +306,7 @@ export interface QaSummary {
   runsAssigned: number;
   runsCreated: number;
   completedOwnedRuns: number;
+  jira: QaJiraAssignmentSummary | null;
   github: QaGithubAutomationSummary | null;
 }
 
@@ -322,6 +330,7 @@ export interface QaStatusBreakdownItem {
 export interface QaCatalogResponse {
   projects: TestRailProjectLite[];
   users: TestRailUserLite[];
+  jiraUsers: JiraUserLite[];
   githubUsers: GithubUser[];
   statuses: TestRailStatusLite[];
   warnings?: string[];

@@ -33,6 +33,39 @@ async (page) => {
     await option.click();
   }
 
+  async function chooseFromSearchableByText(placeholder, index, query, optionText) {
+    const input = page.getByPlaceholder(placeholder).nth(index);
+    await input.click();
+    await input.fill('');
+    await input.fill(query);
+    const option = page.getByRole('option').filter({ hasText: optionText }).first();
+    await option.waitFor({ state: 'visible', timeout: 30000 });
+    await option.click();
+  }
+
+  async function selectProject(projectName) {
+    const input = page.getByPlaceholder('Select project…').nth(0);
+    await input.waitFor({ state: 'visible', timeout: 30000 });
+    const currentValue = (await input.inputValue()).trim();
+    if (currentValue.toLowerCase() === projectName.trim().toLowerCase()) {
+      return;
+    }
+
+    await input.click();
+    await input.fill('');
+    await input.fill(projectName);
+    const option = page.getByRole('option', { name: new RegExp(escapeRegex(projectName), 'i') }).first();
+    await option.waitFor({ state: 'visible', timeout: 30000 });
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/api/qa/catalog?projectId=') && resp.ok(),
+        { timeout: 30000 },
+      ),
+      option.click(),
+    ]);
+    await page.waitForTimeout(1000);
+  }
+
   async function setDateRange(range) {
     const trigger = page
       .locator('button[aria-haspopup="dialog"]')
@@ -71,6 +104,25 @@ async (page) => {
     await captions.first().waitFor({ state: 'hidden', timeout: 10000 });
   }
 
+  async function openQaPage() {
+    await page.goto(`${baseUrl}/qa`, { waitUntil: 'networkidle' });
+    await page.keyboard.press('Meta+0').catch(() => {});
+    await page.getByText('QA resource performance').waitFor({ state: 'visible', timeout: 30000 });
+  }
+
+  async function waitForCompareToSettle() {
+    const button = page.getByRole('button', { name: /^Compare$/ });
+    await button.waitFor({ state: 'visible', timeout: 30000 });
+    await page.waitForFunction(
+      () => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const compare = buttons.find((candidate) => candidate.textContent?.trim() === 'Compare');
+        return !!compare && !compare.hasAttribute('disabled');
+      },
+      { timeout: 30000 },
+    );
+  }
+
   const username = '__USERNAME__';
   const password = '__PASSWORD__';
   const settings = {
@@ -80,6 +132,7 @@ async (page) => {
     jiraEmail: '__JIRA_EMAIL__',
     jiraToken: '__JIRA_API_TOKEN__',
     jiraStoryPointsField: '__JIRA_STORY_POINTS_FIELD__',
+    jiraQAAssigneeField: '__JIRA_QA_ASSIGNEE_FIELD__',
     testRailBaseUrl: '__TESTRAIL_BASE_URL__',
     testRailEmail: '__TESTRAIL_EMAIL__',
     testRailToken: '__TESTRAIL_API_TOKEN__',
@@ -87,7 +140,6 @@ async (page) => {
   const stored = { username, ...settings };
   const cookieValue = encodeURIComponent(JSON.stringify(stored));
 
-  const projectName = '__QA_PROJECT__';
   const comparisons = __COMPARISONS_JSON__;
   const months = __MONTHS_JSON__;
 
@@ -109,36 +161,37 @@ async (page) => {
     document.cookie = `dpd_runtime_settings=${cookie}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }, { username, settings, cookie: cookieValue });
 
-  await page.goto(`${baseUrl}/qa`, { waitUntil: 'networkidle' });
-  await page.keyboard.press('Meta+0').catch(() => {});
-  await page.getByText('QA resource performance').waitFor({ state: 'visible', timeout: 30000 });
-
-  await chooseFromSearchable('Select project…', 0, projectName, new RegExp(escapeRegex(projectName), 'i'));
-  await page.waitForResponse(
-    (resp) => resp.url().includes('/api/qa/catalog?projectId=') && resp.ok(),
-    { timeout: 30000 },
-  );
-  await page.waitForTimeout(1000);
+  await openQaPage();
 
   const screenshots = [];
 
   for (const comparison of comparisons) {
-    await chooseFromSearchable('Select QA…', 0, comparison.leftQa, new RegExp(escapeRegex(comparison.leftQa), 'i'));
-    await chooseFromSearchable('Select QA…', 1, comparison.rightQa, new RegExp(escapeRegex(comparison.rightQa), 'i'));
-    await chooseFromSearchable(
-      'Select GitHub user…',
-      0,
-      comparison.leftGithub,
-      new RegExp(escapeRegex(comparison.leftGithub), 'i'),
-    );
-    await chooseFromSearchable(
-      'Select GitHub user…',
-      1,
-      comparison.rightGithub,
-      new RegExp(escapeRegex(comparison.rightGithub), 'i'),
-    );
+    await openQaPage();
+    let activeProjectName = null;
 
     for (const month of months) {
+      if (activeProjectName !== month.projectName) {
+        await selectProject(month.projectName);
+        activeProjectName = month.projectName;
+      }
+
+      await chooseFromSearchable('Select QA…', 0, comparison.leftQa, new RegExp(escapeRegex(comparison.leftQa), 'i'));
+      await chooseFromSearchable('Select QA…', 1, comparison.rightQa, new RegExp(escapeRegex(comparison.rightQa), 'i'));
+      await chooseFromSearchableByText('Select Jira user…', 0, comparison.leftJiraEmail, comparison.leftJiraEmail);
+      await chooseFromSearchableByText('Select Jira user…', 1, comparison.rightJiraEmail, comparison.rightJiraEmail);
+      await chooseFromSearchable(
+        'Select GitHub user…',
+        0,
+        comparison.leftGithub,
+        new RegExp(escapeRegex(comparison.leftGithub), 'i'),
+      );
+      await chooseFromSearchable(
+        'Select GitHub user…',
+        1,
+        comparison.rightGithub,
+        new RegExp(escapeRegex(comparison.rightGithub), 'i'),
+      );
+
       await setDateRange(month);
       await Promise.all([
         page.waitForResponse(
@@ -148,7 +201,8 @@ async (page) => {
         page.getByRole('button', { name: /^Compare$/ }).click(),
       ]);
 
-      await page.waitForTimeout(2500);
+      await waitForCompareToSettle();
+      await page.waitForTimeout(800);
 
       const fileName = `${month.label}-${comparison.slug}.png`;
       await page.screenshot({

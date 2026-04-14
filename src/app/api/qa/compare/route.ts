@@ -4,7 +4,7 @@ import { withRequestRuntimeConfig } from '@/lib/config';
 import { withCachedRouteResponse } from '@/lib/route-cache';
 import { computeQaComparison } from '@/lib/qa';
 import { getTestRailProjects, getTestRailStatuses, getTestRailUsers } from '@/lib/testrail';
-import type { QaCompareResponse } from '@/lib/types';
+import type { JiraUserLite, QaCompareResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,6 +16,12 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
   const projectId = Number(searchParams.get('projectId') ?? '');
   const leftUserId = Number(searchParams.get('leftUserId') ?? '');
   const rightUserId = Number(searchParams.get('rightUserId') ?? '');
+  const leftJiraAccountId = searchParams.get('leftJiraAccountId')?.trim() || null;
+  const leftJiraDisplayName = searchParams.get('leftJiraDisplayName')?.trim() || null;
+  const leftJiraEmail = searchParams.get('leftJiraEmail')?.trim() || null;
+  const rightJiraAccountId = searchParams.get('rightJiraAccountId')?.trim() || null;
+  const rightJiraDisplayName = searchParams.get('rightJiraDisplayName')?.trim() || null;
+  const rightJiraEmail = searchParams.get('rightJiraEmail')?.trim() || null;
   const leftGithubLogin = searchParams.get('leftGithubLogin')?.trim() || null;
   const rightGithubLogin = searchParams.get('rightGithubLogin')?.trim() || null;
 
@@ -36,6 +42,21 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
       return NextResponse.json({ error: 'Selected TestRail users were not found in this project.' }, { status: 400 });
     }
 
+    const leftJiraUser: JiraUserLite | null = leftJiraAccountId
+      ? {
+          accountId: leftJiraAccountId,
+          displayName: leftJiraDisplayName || leftJiraAccountId,
+          emailAddress: leftJiraEmail || undefined,
+        }
+      : null;
+    const rightJiraUser: JiraUserLite | null = rightJiraAccountId
+      ? {
+          accountId: rightJiraAccountId,
+          displayName: rightJiraDisplayName || rightJiraAccountId,
+          emailAddress: rightJiraEmail || undefined,
+        }
+      : null;
+
     const comparison = await computeQaComparison({
       projectId,
       from,
@@ -43,6 +64,8 @@ async function getQaCompareResponse(req: Request): Promise<Response> {
       leftUser,
       rightUser,
       statuses,
+      leftJiraUser,
+      rightJiraUser,
       leftGithubLogin,
       rightGithubLogin,
     });

@@ -11,6 +11,7 @@ import { useUserRuntimeSettings } from '../components/runtime-settings-client';
 import { areTestRailRuntimeSettingsComplete } from '@/lib/runtime-settings';
 import type {
   GithubUser,
+  JiraUserLite,
   QaCatalogResponse,
   QaCompareResponse,
   QaMetricDefinition,
@@ -35,6 +36,33 @@ function formatPercent(value: number | null): string {
 
 function formatNumber(value: number | null): string {
   return value === null ? '—' : Intl.NumberFormat('en-US').format(Math.round(value));
+}
+
+function formatStoryPoints(value: number | null): string {
+  if (value === null) return '—';
+  return Intl.NumberFormat('en-US', {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function inferJiraAccountId(params: {
+  qaUserId: string;
+  qaUsers: TestRailUserLite[];
+  jiraUsers: JiraUserLite[];
+}): string {
+  const qaUser = params.qaUsers.find((user) => String(user.id) === params.qaUserId);
+  if (!qaUser) return '';
+
+  const qaEmail = (qaUser.email ?? '').trim().toLowerCase();
+  if (qaEmail) {
+    const emailMatch = params.jiraUsers.find((user) => (user.emailAddress ?? '').trim().toLowerCase() === qaEmail);
+    if (emailMatch) return emailMatch.accountId;
+  }
+
+  const qaName = qaUser.name.trim().toLowerCase();
+  const nameMatch = params.jiraUsers.find((user) => user.displayName.trim().toLowerCase() === qaName);
+  return nameMatch?.accountId ?? '';
 }
 
 function formatDuration(seconds: number | null): string {
@@ -83,7 +111,7 @@ function MetricBlueprint(props: { items: QaMetricDefinition[] }): JSX.Element {
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>How this QA view measures productivity</div>
                 <div style={{ color: 'var(--panel-muted)', fontSize: 14 }}>
-            The page blends TestRail execution evidence with GitHub automation delivery, engineering, and coverage signals instead of treating raw execution count as the whole story.
+            The page blends TestRail execution evidence with Jira workload complexity and GitHub automation delivery, engineering, and coverage signals instead of treating raw execution count as the whole story.
                 </div>
               </div>
             </div>
@@ -111,6 +139,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
   const [projectId, setProjectId] = useState('');
   const [leftUserId, setLeftUserId] = useState('');
   const [rightUserId, setRightUserId] = useState('');
+  const [leftJiraAccountId, setLeftJiraAccountId] = useState('');
+  const [rightJiraAccountId, setRightJiraAccountId] = useState('');
   const [leftGithubLogin, setLeftGithubLogin] = useState('');
   const [rightGithubLogin, setRightGithubLogin] = useState('');
   const [catalog, setCatalog] = useState<QaCatalogResponse | null>(null);
@@ -141,6 +171,23 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       subtitle: user.name,
     }))
   ), [catalog]);
+
+  const jiraUserOptions: Option[] = useMemo(() => (
+    (catalog?.jiraUsers ?? []).map((user: JiraUserLite) => ({
+      value: user.accountId,
+      label: user.displayName,
+      subtitle: user.emailAddress,
+    }))
+  ), [catalog]);
+
+  const selectedLeftJiraUser = useMemo(
+    () => catalog?.jiraUsers?.find((user) => user.accountId === leftJiraAccountId) ?? null,
+    [catalog?.jiraUsers, leftJiraAccountId],
+  );
+  const selectedRightJiraUser = useMemo(
+    () => catalog?.jiraUsers?.find((user) => user.accountId === rightJiraAccountId) ?? null,
+    [catalog?.jiraUsers, rightJiraAccountId],
+  );
 
   const metricDefinitions = compare?.metricDefinitions ?? [];
 
@@ -178,6 +225,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
           projects: current?.projects ?? json.projects,
           statuses: json.statuses,
           users: json.users,
+          jiraUsers: current?.jiraUsers?.length ? current.jiraUsers : json.jiraUsers,
           githubUsers: current?.githubUsers?.length ? current.githubUsers : json.githubUsers,
           warnings: Array.from(new Set([...(current?.warnings ?? []), ...(json.warnings ?? [])])),
         }));
@@ -190,6 +238,18 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       }
     })();
   }, [projectId, testRailReady]);
+
+  useEffect(() => {
+    if (!catalog?.jiraUsers?.length || !catalog?.users?.length || !leftUserId) return;
+    const inferred = inferJiraAccountId({ qaUserId: leftUserId, qaUsers: catalog.users, jiraUsers: catalog.jiraUsers });
+    setLeftJiraAccountId(inferred);
+  }, [catalog?.jiraUsers, catalog?.users, leftUserId]);
+
+  useEffect(() => {
+    if (!catalog?.jiraUsers?.length || !catalog?.users?.length || !rightUserId) return;
+    const inferred = inferJiraAccountId({ qaUserId: rightUserId, qaUsers: catalog.users, jiraUsers: catalog.jiraUsers });
+    setRightJiraAccountId(inferred);
+  }, [catalog?.jiraUsers, catalog?.users, rightUserId]);
 
   async function runCompare(): Promise<void> {
     if (!projectId || !leftUserId || !rightUserId) {
@@ -206,6 +266,16 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       url.searchParams.set('to', to);
       url.searchParams.set('leftUserId', leftUserId);
       url.searchParams.set('rightUserId', rightUserId);
+      if (selectedLeftJiraUser) {
+        url.searchParams.set('leftJiraAccountId', selectedLeftJiraUser.accountId);
+        url.searchParams.set('leftJiraDisplayName', selectedLeftJiraUser.displayName);
+        if (selectedLeftJiraUser.emailAddress) url.searchParams.set('leftJiraEmail', selectedLeftJiraUser.emailAddress);
+      }
+      if (selectedRightJiraUser) {
+        url.searchParams.set('rightJiraAccountId', selectedRightJiraUser.accountId);
+        url.searchParams.set('rightJiraDisplayName', selectedRightJiraUser.displayName);
+        if (selectedRightJiraUser.emailAddress) url.searchParams.set('rightJiraEmail', selectedRightJiraUser.emailAddress);
+      }
       if (leftGithubLogin) url.searchParams.set('leftGithubLogin', leftGithubLogin);
       if (rightGithubLogin) url.searchParams.set('rightGithubLogin', rightGithubLogin);
       const resp = await fetch(url.toString());
@@ -228,7 +298,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
         <div style={{ fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--panel-muted)' }}>QA Comparison</div>
         <h1 style={{ fontSize: 34, lineHeight: 1.08, fontWeight: 700 }}>QA resource performance</h1>
         <p style={{ maxWidth: 860, color: 'var(--panel-muted)', lineHeight: 1.6 }}>
-          Compare two QA resources on TestRail execution outcomes and GitHub automation delivery. TestRail stays the source of execution evidence, while GitHub adds automation PR, test asset, framework, and coverage-breadth signals from aligncommerce/test-engineering1.
+          Compare two QA resources on TestRail execution outcomes, Jira workload complexity, and GitHub automation delivery. TestRail stays the source of execution evidence, Jira adds assigned-ticket scope, and GitHub adds automation PR, test asset, framework, and coverage-breadth signals from aligncommerce/test-engineering1.
         </p>
       </div>
 
@@ -264,6 +334,20 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
       ) : (
         <>
           <MetricBlueprint items={metricDefinitions.length > 0 ? metricDefinitions : [
+            {
+              id: 'assigned-tickets',
+              name: 'Assigned Jira tickets',
+              category: 'Complexity',
+              description: 'Distinct Jira tickets attributed through the QA Assignees field during the selected window.',
+              derivation: 'Distinct canonical Jira issues where the mapped Jira user appears in QA Assignees.',
+            },
+            {
+              id: 'assigned-story-points',
+              name: 'Assigned Jira story points',
+              category: 'Complexity',
+              description: 'Feature complexity attached to the QA resource, used to explain heavier test scope.',
+              derivation: 'Sum of story points across the assigned Jira tickets in the selected window.',
+            },
             {
               id: 'results-logged',
               name: 'Results logged',
@@ -312,6 +396,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     setProjectId(value);
                     setLeftUserId('');
                     setRightUserId('');
+                    setLeftJiraAccountId('');
+                    setRightJiraAccountId('');
                     setLeftGithubLogin('');
                     setRightGithubLogin('');
                     setCompare(null);
@@ -325,7 +411,10 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 <SearchableSelect
                   items={userOptions}
                   value={leftUserId}
-                  onChange={setLeftUserId}
+                  onChange={(value) => {
+                    setLeftUserId(value);
+                    setCompare(null);
+                  }}
                   placeholder="Select QA…"
                   disabled={loadingCatalog}
                 />
@@ -335,8 +424,37 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 <SearchableSelect
                   items={userOptions}
                   value={rightUserId}
-                  onChange={setRightUserId}
+                  onChange={(value) => {
+                    setRightUserId(value);
+                    setCompare(null);
+                  }}
                   placeholder="Select QA…"
+                  disabled={loadingCatalog}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Primary Jira user</label>
+                <SearchableSelect
+                  items={jiraUserOptions}
+                  value={leftJiraAccountId}
+                  onChange={(value) => {
+                    setLeftJiraAccountId(value);
+                    setCompare(null);
+                  }}
+                  placeholder="Select Jira user…"
+                  disabled={loadingCatalog}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comparison Jira user</label>
+                <SearchableSelect
+                  items={jiraUserOptions}
+                  value={rightJiraAccountId}
+                  onChange={(value) => {
+                    setRightJiraAccountId(value);
+                    setCompare(null);
+                  }}
+                  placeholder="Select Jira user…"
                   disabled={loadingCatalog}
                 />
               </div>
@@ -374,6 +492,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                   onChange={({ from: nextFrom, to: nextTo }) => {
                     setFrom(nextFrom);
                     setTo(nextTo);
+                    setCompare(null);
                   }}
                 />
               </div>
@@ -403,7 +522,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
               <div style={{ color: 'var(--accent-secondary-text)', fontSize: 13 }}>{catalog?.warnings?.join(' ')}</div>
             )}
             <div style={{ color: 'var(--panel-muted)', fontSize: 13 }}>
-              Map each QA resource to a GitHub user if you want automation metrics from `aligncommerce/test-engineering1`. The TestRail comparison still works without that mapping.
+              Jira users default from the selected TestRail resource email when there is a match. GitHub users still unlock automation metrics from `aligncommerce/test-engineering1`.
             </div>
           </div>
 
@@ -420,6 +539,8 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                 <MetricCard title="Unique tests executed" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.uniqueTests)} rightValue={formatNumber(compare.right.uniqueTests)} helper="Breadth of execution, separating broad coverage from repeated reruns." />
                 <MetricCard title="Pass rate" leftLabel={leftName} rightLabel={rightName} leftValue={formatPercent(compare.left.passRate)} rightValue={formatPercent(compare.right.passRate)} helper="Passed results divided by total results." />
                 <MetricCard title="Failure pressure" leftLabel={leftName} rightLabel={rightName} leftValue={formatPercent(compare.left.failurePressureRate)} rightValue={formatPercent(compare.right.failurePressureRate)} helper="Failed + retest share, useful for spotting unstable or defect-heavy work." />
+                <MetricCard title="Assigned Jira tickets" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.jira?.assignedTicketCount ?? null)} rightValue={formatNumber(compare.right.jira?.assignedTicketCount ?? null)} helper="Distinct Jira tickets attributed to the selected QA through the QA Assignees field in this date window." />
+                <MetricCard title="Assigned Jira story points" leftLabel={leftName} rightLabel={rightName} leftValue={formatStoryPoints(compare.left.jira?.assignedStoryPoints ?? null)} rightValue={formatStoryPoints(compare.right.jira?.assignedStoryPoints ?? null)} helper="Feature complexity attached to the QA resource, useful context when raw run counts differ." />
                 <MetricCard title="Average elapsed" leftLabel={leftName} rightLabel={rightName} leftValue={formatDuration(compare.left.avgElapsedSeconds)} rightValue={formatDuration(compare.right.avgElapsedSeconds)} helper="Average reported execution effort from TestRail elapsed fields." />
                 <MetricCard title="Defects linked" leftLabel={leftName} rightLabel={rightName} leftValue={formatNumber(compare.left.defectsLinked)} rightValue={formatNumber(compare.right.defectsLinked)} helper="Number of defect IDs linked across the selected tester’s result entries." />
               </div>
@@ -484,7 +605,7 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div style={{ ...panelStyle, display: 'grid', gap: 12 }}>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{leftName}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Runs touched</div>
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.left.runsTouched}</div>
@@ -502,6 +623,18 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.left.completedOwnedRuns}</div>
                     </div>
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Jira mapping</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, wordBreak: 'break-word' }}>{compare.left.jira?.displayName ?? '—'}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Assigned tickets</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatNumber(compare.left.jira?.assignedTicketCount ?? null)}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Assigned story points</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatStoryPoints(compare.left.jira?.assignedStoryPoints ?? null)}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub mapping</div>
                       <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, wordBreak: 'break-word' }}>{compare.left.github?.login ?? '—'}</div>
                     </div>
@@ -511,9 +644,9 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     </div>
                   </div>
                 </div>
-                <div style={{ ...panelStyle, display: 'grid', gap: 12 }}>
+              <div style={{ ...panelStyle, display: 'grid', gap: 12 }}>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{rightName}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Runs touched</div>
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.right.runsTouched}</div>
@@ -529,6 +662,18 @@ export default function QaPageClient(props: { username: string }): JSX.Element {
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Owned completed runs</div>
                       <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{compare.right.completedOwnedRuns}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Jira mapping</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, wordBreak: 'break-word' }}>{compare.right.jira?.displayName ?? '—'}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Assigned tickets</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatNumber(compare.right.jira?.assignedTicketCount ?? null)}</div>
+                    </div>
+                    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>Assigned story points</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{formatStoryPoints(compare.right.jira?.assignedStoryPoints ?? null)}</div>
                     </div>
                     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-br)', borderRadius: 12, padding: 12 }}>
                       <div style={{ color: 'var(--panel-muted)', fontSize: 12 }}>GitHub mapping</div>

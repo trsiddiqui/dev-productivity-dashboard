@@ -2,9 +2,11 @@ import { eachDayOfInterval, formatISO } from 'date-fns';
 import type {
   QaDailyPoint,
   QaGithubAutomationSummary,
+  QaJiraAssignmentSummary,
   QaMetricDefinition,
   QaStatusBreakdownItem,
   QaSummary,
+  JiraUserLite,
   TestRailStatusLite,
   TestRailUserLite,
 } from './types';
@@ -20,8 +22,23 @@ import {
   parseTestRailTimespanToSeconds,
   type TestRailRunLite,
 } from './testrail';
+import { getJiraIssuesAssignedToQa } from './jira';
 
 const QA_METRIC_DEFINITIONS: QaMetricDefinition[] = [
+  {
+    id: 'assigned-tickets',
+    name: 'Assigned Jira tickets',
+    category: 'Complexity',
+    description: 'Distinct Jira tickets where the selected QA is listed in the QA Assignees field during the selected window.',
+    derivation: 'Distinct canonical Jira issues updated in the window where the QA Assignees custom field contains the selected Jira user.',
+  },
+  {
+    id: 'assigned-story-points',
+    name: 'Assigned Jira story points',
+    category: 'Complexity',
+    description: 'Feature complexity attached to the QA resource, useful context when raw run counts are lower.',
+    derivation: 'Sum of story points across the distinct canonical Jira issues attributed to the selected Jira user in the window.',
+  },
   {
     id: 'results-logged',
     name: 'Results logged',
@@ -153,6 +170,7 @@ function buildEmptySummary(user: TestRailUserLite): MutableQaSummary {
     runsAssigned: 0,
     runsCreated: 0,
     completedOwnedRuns: 0,
+    jira: null,
     github: null,
     _uniqueTests: new Set<number>(),
     _runsTouched: new Set<number>(),
@@ -217,7 +235,27 @@ function finalizeSummary(summary: MutableQaSummary): QaSummary {
     runsAssigned: summary.runsAssigned,
     runsCreated: summary.runsCreated,
     completedOwnedRuns: summary.completedOwnedRuns,
+    jira: summary.jira,
     github: summary.github,
+  };
+}
+
+async function computeJiraAssignmentSummary(params: {
+  from: string;
+  to: string;
+  jiraUser: JiraUserLite;
+}): Promise<QaJiraAssignmentSummary> {
+  const issues = await getJiraIssuesAssignedToQa({
+    from: params.from,
+    to: params.to,
+    jiraUser: params.jiraUser,
+  });
+
+  return {
+    accountId: params.jiraUser.accountId,
+    displayName: params.jiraUser.displayName,
+    assignedTicketCount: issues.length,
+    assignedStoryPoints: issues.reduce((total, issue) => total + (issue.storyPoints ?? 0), 0),
   };
 }
 
@@ -396,6 +434,8 @@ export async function computeQaComparison(params: {
   leftUser: TestRailUserLite;
   rightUser: TestRailUserLite;
   statuses: TestRailStatusLite[];
+  leftJiraUser?: JiraUserLite | null;
+  rightJiraUser?: JiraUserLite | null;
   leftGithubLogin?: string | null;
   rightGithubLogin?: string | null;
 }): Promise<{
@@ -406,7 +446,18 @@ export async function computeQaComparison(params: {
   metricDefinitions: QaMetricDefinition[];
   warnings?: string[];
 }> {
-  const { projectId, from, to, leftUser, rightUser, statuses, leftGithubLogin, rightGithubLogin } = params;
+  const {
+    projectId,
+    from,
+    to,
+    leftUser,
+    rightUser,
+    statuses,
+    leftJiraUser,
+    rightJiraUser,
+    leftGithubLogin,
+    rightGithubLogin,
+  } = params;
   const fromTimestamp = Math.floor(new Date(`${from}T00:00:00Z`).getTime() / 1000);
   const toTimestamp = Math.floor(new Date(`${to}T23:59:59Z`).getTime() / 1000);
   const warnings: string[] = [];
@@ -500,16 +551,33 @@ export async function computeQaComparison(params: {
   if (!leftGithubLogin || !rightGithubLogin) {
     warnings.push('Select the corresponding GitHub users to unlock automation metrics from aligncommerce/test-engineering1.');
   }
+  if (!leftJiraUser || !rightJiraUser) {
+    warnings.push('Select the corresponding Jira users to unlock assigned ticket count and story point complexity metrics.');
+  }
 
-  const [leftGithubSummary, rightGithubSummary] = await Promise.all([
+  const [leftGithubSummary, rightGithubSummary, leftJiraSummary, rightJiraSummary] = await Promise.all([
     leftGithubLogin
       ? computeGithubAutomationSummary({ login: leftGithubLogin, from, to })
       : Promise.resolve(null),
     rightGithubLogin
       ? computeGithubAutomationSummary({ login: rightGithubLogin, from, to })
       : Promise.resolve(null),
+    leftJiraUser
+      ? computeJiraAssignmentSummary({ from, to, jiraUser: leftJiraUser }).catch((error) => {
+          warnings.push(`Primary Jira complexity metrics unavailable: ${error instanceof Error ? error.message : String(error)}`);
+          return null;
+        })
+      : Promise.resolve(null),
+    rightJiraUser
+      ? computeJiraAssignmentSummary({ from, to, jiraUser: rightJiraUser }).catch((error) => {
+          warnings.push(`Comparison Jira complexity metrics unavailable: ${error instanceof Error ? error.message : String(error)}`);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
+  left.jira = leftJiraSummary;
+  right.jira = rightJiraSummary;
   left.github = leftGithubSummary;
   right.github = rightGithubSummary;
 

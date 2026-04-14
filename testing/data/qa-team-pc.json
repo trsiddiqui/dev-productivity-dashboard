@@ -1,0 +1,25 @@
+{
+  "defaultProject": "VeemTestEngineeringV26",
+  "members": [
+    {
+      "alias": "pratiksha",
+      "name": "Pratikhsa Shukla",
+      "email": "pratiksha.shukla@veem.com",
+      "githubLogin": "pratikshaveem"
+    },
+    {
+      "alias": "emad",
+      "name": "Emad Badawi",
+      "email": "emad.badawi@veem.com",
+      "githubLogin": "Ebadawi"
+    }
+  ],
+  "defaultComparisons": [
+    {
+      "alias": "emad-vs-pratiksha",
+      "slug": "emad-vs-pratiksha",
+      "leftQaAlias": "emad",
+      "rightQaAlias": "pratiksha"
+    }
+  ]
+}

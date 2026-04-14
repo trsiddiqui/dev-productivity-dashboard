@@ -1,0 +1,16 @@
+{
+  "name": "productivity-reports",
+  "version": "1.0.0",
+  "main": "build_reports.mjs",
+  "scripts": {
+    "build": "node build_reports.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Reusable productivity report generator for dashboard metrics.",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

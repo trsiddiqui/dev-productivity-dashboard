@@ -58,10 +58,12 @@ function parseArgs(argv) {
 
 function monthRange(year, monthIndex) {
   const from = new Date(Date.UTC(year, monthIndex, 1));
-  const to = new Date(Date.UTC(year, monthIndex + 1, 0));
-  const mm = String(monthIndex + 1).padStart(2, '0');
+  const normalizedYear = from.getUTCFullYear();
+  const normalizedMonthIndex = from.getUTCMonth();
+  const to = new Date(Date.UTC(normalizedYear, normalizedMonthIndex + 1, 0));
+  const mm = String(normalizedMonthIndex + 1).padStart(2, '0');
   return {
-    label: `${year}-${mm}`,
+    label: `${normalizedYear}-${mm}`,
     monthLabel: from.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
     lastDay: to.getUTCDate(),
   };
@@ -102,6 +104,35 @@ function loadJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(dataDir, relativePath), 'utf8'));
 }
 
+function loadRosterSet(prefix) {
+  const files = fs.readdirSync(dataDir)
+    .filter((file) => file === `${prefix}.json` || file.startsWith(`${prefix}-`))
+    .sort((left, right) => {
+      if (left === `${prefix}.json`) return -1;
+      if (right === `${prefix}.json`) return 1;
+      return left.localeCompare(right);
+    });
+
+  if (files.length === 0) fail(`No roster files found for ${prefix}.`);
+
+  const members = [];
+  const defaultComparisons = [];
+  let defaultProject;
+
+  for (const file of files) {
+    const roster = loadJson(file);
+    for (const member of roster.members ?? []) {
+      if (!members.some((entry) => entry.alias === member.alias)) members.push(member);
+    }
+    for (const comparison of roster.defaultComparisons ?? []) {
+      if (!defaultComparisons.some((entry) => entry.alias === comparison.alias)) defaultComparisons.push(comparison);
+    }
+    if (!defaultProject && roster.defaultProject) defaultProject = roster.defaultProject;
+  }
+
+  return { members, defaultComparisons, defaultProject, files };
+}
+
 function pickDevAccounts(options, roster) {
   const aliases = (options.aliases ?? 'all').split(',').map((item) => item.trim()).filter(Boolean);
   if (aliases.length === 1 && aliases[0] === 'all') {
@@ -132,6 +163,8 @@ function pickQaComparisons(options, roster) {
       slug: comparison.slug,
       leftQa: left.name,
       rightQa: right.name,
+      leftJiraEmail: left.email,
+      rightJiraEmail: right.email,
       leftGithub: left.githubLogin,
       rightGithub: right.githubLogin,
       alias: comparison.alias,
@@ -161,8 +194,21 @@ function buildQaMonths(options) {
     .map(parseMonthToken);
 }
 
-function resolveQaProject(options, roster) {
-  return options.project ?? roster.defaultProject ?? 'VeemTestEngineeringV26';
+function inferVersionedProjectName(defaultProject, month) {
+  if (!defaultProject) return null;
+  const match = /^(.*V)(\d{2})$/.exec(defaultProject);
+  if (!match) return defaultProject;
+  const targetSuffix = String(month.label.slice(2, 4));
+  return `${match[1]}${targetSuffix}`;
+}
+
+function resolveQaMonthsWithProjects(options, roster) {
+  const months = buildQaMonths(options);
+  const explicitProject = options.project;
+  return months.map((month) => ({
+    ...month,
+    projectName: explicitProject ?? inferVersionedProjectName(roster.defaultProject, month) ?? roster.defaultProject ?? 'VeemTestEngineeringV26',
+  }));
 }
 
 function timestampSlug(date = new Date()) {
@@ -198,6 +244,7 @@ function buildCommonReplacements(env, outputDir, baseUrl) {
     '__JIRA_EMAIL__': env.JIRA_EMAIL ?? '',
     '__JIRA_API_TOKEN__': env.JIRA_API_TOKEN ?? '',
     '__JIRA_STORY_POINTS_FIELD__': env.JIRA_STORY_POINTS_FIELD ?? 'customfield_11125',
+    '__JIRA_QA_ASSIGNEE_FIELD__': env.JIRA_QA_ASSIGNEE_FIELD ?? 'customfield_11370',
     '__TESTRAIL_BASE_URL__': env.TESTRAIL_BASE_URL ?? '',
     '__TESTRAIL_EMAIL__': env.TESTRAIL_EMAIL ?? '',
     '__TESTRAIL_API_TOKEN__': env.TESTRAIL_API_TOKEN ?? '',
@@ -218,6 +265,19 @@ function runCommand(command, args, options = {}) {
     failWithResult(`Command failed: ${command} ${args.join(' ')}`, result);
   }
   return result;
+}
+
+function ensurePlaywrightRunSucceeded(result, contextLabel) {
+  const stdout = String(result?.stdout ?? '');
+  const stderr = String(result?.stderr ?? '');
+  if (/^### Error\b/m.test(stdout) || /^### Error\b/m.test(stderr)) {
+    failWithResult(`Playwright run failed during ${contextLabel}.`, result);
+  }
+}
+
+function countFilesWithExtension(dirPath, extension) {
+  if (!fs.existsSync(dirPath)) return 0;
+  return fs.readdirSync(dirPath).filter((file) => file.endsWith(extension)).length;
 }
 
 function buildDevReport(outputDir, developers, monthPairs) {
@@ -271,6 +331,7 @@ function buildQaReport(outputDir, comparisons, months) {
 <section class="card">
   <div class="meta">${comparison.leftQa} vs ${comparison.rightQa}</div>
   <h2>${month.label}</h2>
+  <div class="actions" style="color:#94a3b8;font-size:13px;margin-bottom:10px;">${month.projectName}</div>
   <div class="actions"><a href="${fileName}" target="_blank" rel="noreferrer">Open full screenshot</a></div>
   <a class="thumb" href="${fileName}" target="_blank" rel="noreferrer"><img src="${fileName}" alt="${comparison.leftQa} vs ${comparison.rightQa} ${month.label}" loading="lazy" /></a>
 </section>`);
@@ -333,11 +394,13 @@ const shouldOpen = options.open !== false;
 
 let generatedScriptPath;
 let reportHtml;
+let expectedScreenshotCount = 0;
 
 if (kind === 'dev') {
-  const roster = loadJson('dev-team.json');
+  const roster = loadRosterSet('dev-team');
   const developers = pickDevAccounts(options, roster);
   const monthPairs = buildDevPairs(options);
+  expectedScreenshotCount = developers.length * monthPairs.length;
   generatedScriptPath = writeGeneratedScript(
     path.join(templatesDir, 'dev-capture.template.js'),
     {
@@ -349,15 +412,14 @@ if (kind === 'dev') {
   );
   reportHtml = buildDevReport(outputDir, developers, monthPairs);
 } else {
-  const roster = loadJson('qa-team.json');
+  const roster = loadRosterSet('qa-team');
   const comparisons = pickQaComparisons(options, roster);
-  const months = buildQaMonths(options);
-  const projectName = resolveQaProject(options, roster);
+  const months = resolveQaMonthsWithProjects(options, roster);
+  expectedScreenshotCount = comparisons.length * months.length;
   generatedScriptPath = writeGeneratedScript(
     path.join(templatesDir, 'qa-capture.template.js'),
     {
       ...buildCommonReplacements(env, outputDir, baseUrl),
-      '__QA_PROJECT__': projectName,
       '__COMPARISONS_JSON__': JSON.stringify(comparisons),
       '__MONTHS_JSON__': JSON.stringify(months),
     },
@@ -370,7 +432,15 @@ runCommand(pwcli, [`-s=${session}`, 'close']);
 const openArgs = [`-s=${session}`, 'open', `${baseUrl}/${kind === 'dev' ? 'contributions' : 'qa'}`];
 if (headed) openArgs.push('--headed');
 runCommand(pwcli, openArgs);
-runCommand(pwcli, [`-s=${session}`, 'run-code', '--filename', generatedScriptPath]);
+const runResult = runCommand(pwcli, [`-s=${session}`, 'run-code', '--filename', generatedScriptPath]);
+ensurePlaywrightRunSucceeded(runResult, `${kind} capture`);
+
+const actualScreenshotCount = countFilesWithExtension(outputDir, '.png');
+if (actualScreenshotCount !== expectedScreenshotCount) {
+  fail(
+    `Expected ${expectedScreenshotCount} screenshots for ${kind} capture, but found ${actualScreenshotCount} in ${outputDir}.`,
+  );
+}
 
 const reportPath = path.join(outputDir, 'index.html');
 fs.writeFileSync(reportPath, reportHtml, 'utf8');

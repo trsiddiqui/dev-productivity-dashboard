@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "capture:dev": "node testing/run-capture.mjs dev",
-    "capture:qa": "node testing/run-capture.mjs qa"
+    "capture:qa": "node testing/run-capture.mjs qa",
+    "report:setup": "npm --prefix reports/productivity_20260414 install",
+    "report:productivity": "node reports/run-productivity-reports.mjs",
+    "report:productivity:reuse": "node reports/run-productivity-reports.mjs --reuse-data"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",
