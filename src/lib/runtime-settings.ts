@@ -3,6 +3,7 @@ export const RUNTIME_SETTINGS_STORAGE_PREFIX = 'dpd-runtime-settings';
 
 export const DEFAULT_JIRA_BASE_URL = 'https://aligncommerce.atlassian.net';
 export const DEFAULT_JIRA_STORY_POINTS_FIELD = 'customfield_11125';
+export const DEFAULT_JIRA_QA_ASSIGNEE_FIELD = 'customfield_11370';
 
 export interface RuntimeSettingsFields {
   githubToken: string;
@@ -11,6 +12,7 @@ export interface RuntimeSettingsFields {
   jiraEmail: string;
   jiraToken: string;
   jiraStoryPointsField: string;
+  jiraQAAssigneeField: string;
   testRailBaseUrl: string;
   testRailEmail: string;
   testRailToken: string;
@@ -32,6 +34,7 @@ export function getDefaultRuntimeSettingsFields(): RuntimeSettingsFields {
     jiraEmail: '',
     jiraToken: '',
     jiraStoryPointsField: DEFAULT_JIRA_STORY_POINTS_FIELD,
+    jiraQAAssigneeField: DEFAULT_JIRA_QA_ASSIGNEE_FIELD,
     testRailBaseUrl: '',
     testRailEmail: '',
     testRailToken: '',
@@ -49,6 +52,7 @@ export function normalizeRuntimeSettingsFields(
     jiraEmail: normalizeText(value?.jiraEmail) || defaults.jiraEmail,
     jiraToken: normalizeText(value?.jiraToken) || defaults.jiraToken,
     jiraStoryPointsField: normalizeText(value?.jiraStoryPointsField) || defaults.jiraStoryPointsField,
+    jiraQAAssigneeField: normalizeText(value?.jiraQAAssigneeField) || defaults.jiraQAAssigneeField,
     testRailBaseUrl: normalizeText(value?.testRailBaseUrl) || defaults.testRailBaseUrl,
     testRailEmail: normalizeText(value?.testRailEmail) || defaults.testRailEmail,
     testRailToken: normalizeText(value?.testRailToken) || defaults.testRailToken,

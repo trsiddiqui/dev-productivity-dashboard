@@ -1,0 +1,46 @@
+{
+  "members": [
+    {
+      "alias": "andre",
+      "name": "Andre Cabral",
+      "githubLogin": "andre-cabral-veem",
+      "jiraDisplayName": "Andre Cabral",
+      "jiraEmail": "andre.cabral@veem.com"
+    },
+    {
+      "alias": "anton",
+      "name": "Anton Garmash",
+      "githubLogin": "AGVeem",
+      "jiraDisplayName": "Anton Garmash",
+      "jiraEmail": "anton.garmash@veem.com"
+    },
+    {
+      "alias": "jonnatas",
+      "name": "Jonnatas De Araújo Silva",
+      "githubLogin": "jonsilvabr",
+      "jiraDisplayName": "Jonnatas De Araújo Silva",
+      "jiraEmail": "jonnatas.silva@veem.com"
+    },
+    {
+      "alias": "leroy",
+      "name": "Leroy Alan Rodríguez Del Villar",
+      "githubLogin": "leroyrodriguez1990",
+     "jiraDisplayName": "Leroy Alan Rodríguez Del Villar",
+     "jiraEmail": "leroy.alan@veem.com"
+    },
+    {
+     "alias": "oscar",
+     "name": "Oscar Garcia",
+     "githubLogin": "oscarveem",
+     "jiraDisplayName": "Oscar Garcia",
+     "jiraEmail": "oscar.garcia@veem.com"
+    },
+    {
+     "alias": "vladislav",
+     "name": "Vladislav Musienko",
+     "githubLogin": "vladmus",
+     "jiraDisplayName": "Vladislav Musienko",
+     "jiraEmail": "vladislav.musienko@veem.com"
+    }
+  ]
+}

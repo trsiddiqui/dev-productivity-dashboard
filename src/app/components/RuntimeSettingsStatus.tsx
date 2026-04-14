@@ -127,6 +127,10 @@ export default function RuntimeSettingsStatus(props: { username: string }): JSX.
                 <div style={valueCellStyle}>{settings.jiraStoryPointsField || 'Not set'}</div>
               </div>
               <div style={valueRowStyle}>
+                <div style={{ color: 'var(--panel-muted)' }}>QA assignees field</div>
+                <div style={valueCellStyle}>{settings.jiraQAAssigneeField || 'Not set'}</div>
+              </div>
+              <div style={valueRowStyle}>
                 <div style={{ color: 'var(--panel-muted)' }}>TestRail base URL</div>
                 <div style={valueCellStyle}>{settings.testRailBaseUrl || 'Not set'}</div>
               </div>

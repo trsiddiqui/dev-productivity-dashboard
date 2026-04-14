@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -27,6 +27,10 @@
 testing/generated/
 testing/output/
 tmp/*.generated.js
+reports/productivity_20260414/node_modules/
+reports/productivity_20260414/artifacts/
+reports/productivity_20260414/review/
+reports/productivity_runs/
 
 # debug
 npm-debug.log*

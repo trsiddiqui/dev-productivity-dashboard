@@ -765,6 +765,119 @@ export async function getJiraIssuesUpdated(params: {
   return Array.from(byId.values());
 }
 
+function matchesQaAssignee(
+  qaAssignees: Array<{ id?: string; name: string }> | undefined,
+  jiraUser: JiraUserLite
+): boolean {
+  if (!qaAssignees?.length) return false;
+
+  const targetAccountId = jiraUser.accountId.trim().toLowerCase();
+  const targetName = jiraUser.displayName.trim().toLowerCase();
+  const targetEmail = (jiraUser.emailAddress ?? '').trim().toLowerCase();
+
+  return qaAssignees.some((assignee) => {
+    const assigneeId = (assignee.id ?? '').trim().toLowerCase();
+    const assigneeName = assignee.name.trim().toLowerCase();
+    return assigneeId === targetAccountId
+      || assigneeName === targetName
+      || (!!targetEmail && assigneeName === targetEmail);
+  });
+}
+
+export async function getJiraIssuesAssignedToQa(params: {
+  from: string;
+  to: string;
+  jiraUser: JiraUserLite;
+  projectKey?: string;
+}): Promise<JiraIssue[]> {
+  const { from, to, jiraUser, projectKey } = params;
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken || !cfg.jiraQAAssigneeField) return [];
+
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+  const fields: string[] = [
+    'summary',
+    'assignee',
+    'status',
+    'updated',
+    'created',
+    'resolutiondate',
+    'issuetype',
+    'parent',
+    'customfield_10014',
+    cfg.jiraStoryPointsField,
+    cfg.jiraQAAssigneeField,
+  ];
+
+  const qaFieldJqlName = cfg.jiraQAAssigneeField.startsWith('customfield_')
+    ? `cf[${cfg.jiraQAAssigneeField.replace('customfield_', '')}]`
+    : `"${cfg.jiraQAAssigneeField}"`;
+  const qaAssigneeFilter = jiraUser.accountId
+    ? `AND ${qaFieldJqlName} = "${jiraUser.accountId}"`
+    : `AND ${qaFieldJqlName} is not EMPTY`;
+  const projectFilter = projectKey ? `AND project = ${projectKey}` : '';
+  const jql = [
+    `updated >= "${from}" AND updated <= "${to}"`,
+    qaAssigneeFilter,
+    projectFilter,
+  ].filter(Boolean).join(' ');
+
+  console.log('[API CALL START] runJQL (issues-assigned-to-qa)');
+  const raw = await runJQL({ jql, fields, auth, base }).catch(() => [] as JiraIssueRaw[]);
+  console.log(`[API CALL END] runJQL (issues-assigned-to-qa) -> items=${raw.length}`);
+
+  const matchedIssues: JiraIssue[] = [];
+  const parentKeys = new Set<string>();
+
+  for (const issue of raw) {
+    const qaAssignees = parseQAAssignees(issue.fields[cfg.jiraQAAssigneeField]);
+    if (!matchesQaAssignee(qaAssignees, jiraUser)) continue;
+
+    const spUnknown = issue.fields[cfg.jiraStoryPointsField];
+    const storyPoints = typeof spUnknown === 'number' ? spUnknown : undefined;
+    const assigneeField = issue.fields.assignee;
+    const issueTypeField = (issue.fields as Record<string, unknown>).issuetype;
+    const parentKey = ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key;
+    const isSubtask = isJiraSubtaskField(issueTypeField);
+
+    if (isSubtask && parentKey) parentKeys.add(parentKey);
+
+    matchedIssues.push({
+      id: issue.id,
+      key: issue.key,
+      summary: issue.fields.summary,
+      assignee: assigneeField?.displayName,
+      status: issue.fields.status?.name ?? undefined,
+      storyPoints,
+      url: `${base}/browse/${issue.key}`,
+      updated: issue.fields.updated,
+      created: issue.fields.created,
+      resolutiondate: issue.fields.resolutiondate,
+      issueType: (issueTypeField as { name?: string } | undefined)?.name,
+      isSubtask,
+      parentKey,
+      epicKey: (issue.fields as Record<string, unknown>).customfield_10014 as (string | undefined),
+      qaAssignees,
+    });
+  }
+
+  const parentIssues = parentKeys.size > 0
+    ? await getJiraIssuesByKeys(Array.from(parentKeys))
+    : [];
+  const parentByKey = new Map(parentIssues.map((issue) => [issue.key, issue]));
+
+  const canonicalIssues = new Map<string, JiraIssue>();
+  for (const issue of matchedIssues) {
+    if (issue.isSubtask && issue.parentKey && parentByKey.has(issue.parentKey)) {
+      canonicalIssues.set(issue.parentKey, parentByKey.get(issue.parentKey)!);
+      continue;
+    }
+    canonicalIssues.set(issue.key, issue);
+  }
+
+  return Array.from(canonicalIssues.values()).sort((left, right) => left.key.localeCompare(right.key));
+}
+
 export async function getQAAssignmentTimesAll(
   items: Array<{ key: string; qa: Array<{ id?: string; name: string }> }>,
   qaFieldId: string

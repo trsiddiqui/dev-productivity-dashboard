@@ -207,6 +207,13 @@ export default function SettingsPageClient(props: { username: string }): JSX.Ele
               placeholder="customfield_11125"
             />
             <Field
+              label="Jira QA assignees field"
+              value={form.jiraQAAssigneeField}
+              onChange={(value) => updateField('jiraQAAssigneeField', value)}
+              placeholder="customfield_11370"
+              help="Used on the QA page to attribute Jira tickets and story points to QA resources."
+            />
+            <Field
               label="TestRail base URL"
               value={form.testRailBaseUrl}
               onChange={(value) => updateField('testRailBaseUrl', value)}
