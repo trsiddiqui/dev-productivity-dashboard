@@ -52,3 +52,5 @@ next-env.d.ts
 .history*
 
 code_dump.txt
+.chrome*
+*.log

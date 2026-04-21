@@ -11,13 +11,17 @@ function buildNextPath(pathname: string, searchParams: URLSearchParams): string 
   return `${pathname}${search ? `?${search}` : ''}`;
 }
 
-export default function SettingsAccessGate(props: { username: string; children: ReactNode }) {
-  const { username, children } = props;
+export default function SettingsAccessGate(props: {
+  username: string;
+  serverConfigured?: boolean;
+  children: ReactNode;
+}) {
+  const { username, serverConfigured = false, children } = props;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { settings, ready } = useUserRuntimeSettings(username);
-  const settingsReady = areCoreRuntimeSettingsComplete(settings);
+  const settingsReady = serverConfigured || areCoreRuntimeSettingsComplete(settings);
   const onSettingsPage = pathname === '/settings';
 
   useEffect(() => {
