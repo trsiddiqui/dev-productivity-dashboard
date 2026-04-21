@@ -14,6 +14,7 @@ interface JiraIssueFields {
   summary: string;
   assignee?: JiraUser;
   resolutiondate?: string;
+  resolution?: { name?: string };
   status?: JiraStatus;
   updated?: string;
   created?: string;
@@ -136,7 +137,7 @@ export async function getJiraDoneIssues(params: {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
-  const fields: string[] = ['summary', 'assignee', 'resolutiondate', 'status', cfg.jiraStoryPointsField];
+  const fields: string[] = ['summary', 'assignee', 'resolutiondate', 'resolution', 'status', cfg.jiraStoryPointsField];
 
   const envProjects = (process.env.JIRA_PROJECTS ?? '').split(',').map(s => s.trim()).filter(Boolean);
   const projectFilter = projectKey
@@ -202,6 +203,7 @@ export async function getJiraDoneIssues(params: {
       summary: issue.fields.summary,
       assignee: assigneeField?.displayName,
       resolutiondate: issue.fields.resolutiondate,
+      resolution: issue.fields.resolution?.name,
       storyPoints,
       status: issue.fields.status?.name ?? undefined,
       url: `${base}/browse/${issue.key}`,
@@ -356,6 +358,7 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
     cfg.jiraStoryPointsField,
     'customfield_10014', // Epic Link
     'resolutiondate',
+    'resolution',
     'description',
     ...(cfg.jiraQAAssigneeField ? [cfg.jiraQAAssigneeField] : []),
   ];
@@ -407,6 +410,7 @@ export async function getJiraSprintIssues(sprintId: number): Promise<JiraIssueMo
         parentKey: it.fields.parent?.key,
         epicKey,
         resolutiondate: it.fields.resolutiondate as (string | undefined),
+        resolution: (it.fields.resolution as { name?: string } | undefined)?.name,
 
         qaAssignees,
         description,
@@ -565,6 +569,174 @@ export async function getIssuePhaseTimes(
   return out;
 }
 
+export interface JiraIssueWorkflowInsight {
+  key: string;
+  status?: string;
+  resolution?: string;
+  created?: string;
+  todoAt?: string;
+  inProgressAt?: string;
+  mergedAt?: string;
+  reviewAt?: string;
+  completeAt?: string;
+  updatedByActorInWindow?: boolean;
+  reviewEntryCount: number;
+  backflowCount: number;
+  reopenedCount: number;
+  reopenedAfterComplete: boolean;
+  backflowDates?: string[];
+  reopenedDates?: string[];
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const current = cursor;
+      cursor += 1;
+      results[current] = await task(items[current]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+export async function getJiraIssueWorkflowInsights(params: {
+  issueKeys: string[];
+  stages: { todo: string[]; inProgress: string[]; review: string[]; complete: string[]; merged?: string[] };
+  from?: string;
+  to?: string;
+  actorAccountId?: string;
+}): Promise<Record<string, JiraIssueWorkflowInsight>> {
+  const { issueKeys, stages, from, to, actorAccountId } = params;
+  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken || issueKeys.length === 0) return {};
+
+  const base = normalizedBase();
+  const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
+  const norm = (value?: string) => (value ?? '').trim().toLowerCase();
+  const todoSet = new Set(stages.todo.map(norm));
+  const inProgressSet = new Set(stages.inProgress.map(norm));
+  const mergedSet = new Set((stages.merged ?? []).map(norm));
+  const reviewSet = new Set(stages.review.map(norm));
+  const completeSet = new Set(stages.complete.map(norm));
+  const fromMs = from ? new Date(from).getTime() : Number.NaN;
+  const toMs = to ? new Date(to).getTime() : Number.NaN;
+  const keys = Array.from(new Set(issueKeys.map((key) => key.trim()).filter(Boolean)));
+
+  const rows = await mapWithConcurrency(keys, 5, async (key) => {
+    const url = `${base}/rest/api/3/issue/${encodeURIComponent(key)}?expand=changelog&fields=created,status,resolution`;
+    console.log(`[API FETCH START] GET ${url}`);
+    const resp = await fetch(url, {
+      headers: { Authorization: auth, Accept: 'application/json' },
+    });
+    console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
+    if (!resp.ok) return null;
+
+    const data = await resp.json() as {
+      fields?: {
+        created?: string;
+        status?: { name?: string };
+        resolution?: { name?: string };
+      };
+      changelog?: {
+        histories?: Array<{
+          created?: string;
+          author?: { accountId?: string };
+          items?: Array<{ field?: string; fromString?: string; toString?: string }>;
+        }>;
+      };
+    };
+
+    let todoAt: string | undefined = data.fields?.created;
+    let inProgressAt: string | undefined;
+    let mergedAt: string | undefined;
+    let reviewAt: string | undefined;
+    let completeAt: string | undefined;
+    let updatedByActor = false;
+    let reviewEntryCount = 0;
+    let backflowCount = 0;
+    let reopenedCount = 0;
+    let reopenedAfterComplete = false;
+    const backflowDates: string[] = [];
+    const reopenedDates: string[] = [];
+
+    const histories = (data.changelog?.histories ?? [])
+      .slice()
+      .sort((left, right) => (left.created ?? '').localeCompare(right.created ?? ''));
+
+    for (const history of histories) {
+      const when = history.created;
+      const whenMs = when ? new Date(when).getTime() : Number.NaN;
+      const inRange = Number.isFinite(fromMs) && Number.isFinite(toMs)
+        ? (Number.isFinite(whenMs) && whenMs >= fromMs && whenMs <= (toMs + 24 * 60 * 60 * 1000 - 1))
+        : false;
+
+      for (const item of history.items ?? []) {
+        if (item.field !== 'status' || !item.toString) continue;
+
+        const fromStatus = norm(item.fromString);
+        const toStatus = norm(item.toString);
+        const fromReviewLike = reviewSet.has(fromStatus) || completeSet.has(fromStatus);
+        const toWorkLike = todoSet.has(toStatus) || inProgressSet.has(toStatus);
+        const toReviewLike = reviewSet.has(toStatus) || completeSet.has(toStatus);
+
+        if (!todoAt && todoSet.has(toStatus)) todoAt = when;
+        if (!inProgressAt && inProgressSet.has(toStatus)) inProgressAt = when;
+        if (!mergedAt && mergedSet.has(toStatus)) mergedAt = when;
+        if (!reviewAt && reviewSet.has(toStatus)) reviewAt = when;
+        if (!completeAt && completeSet.has(toStatus)) completeAt = when;
+
+        if (toReviewLike && !fromReviewLike) {
+          reviewEntryCount += 1;
+        }
+        if (fromReviewLike && toWorkLike) {
+          backflowCount += 1;
+          if (when) backflowDates.push(when);
+        }
+        if (completeSet.has(fromStatus) && !completeSet.has(toStatus)) {
+          reopenedAfterComplete = true;
+          reopenedCount += 1;
+          if (when) reopenedDates.push(when);
+        }
+      }
+
+      if (!updatedByActor && inRange && actorAccountId && history.author?.accountId === actorAccountId) {
+        updatedByActor = true;
+      }
+    }
+
+    return {
+      key,
+      status: data.fields?.status?.name,
+      resolution: data.fields?.resolution?.name,
+      created: data.fields?.created,
+      todoAt,
+      inProgressAt,
+      mergedAt,
+      reviewAt,
+      completeAt,
+      updatedByActorInWindow: updatedByActor,
+      reviewEntryCount,
+      backflowCount,
+      reopenedCount,
+      reopenedAfterComplete,
+      backflowDates,
+      reopenedDates,
+    } satisfies JiraIssueWorkflowInsight;
+  });
+
+  const out: Record<string, JiraIssueWorkflowInsight> = {};
+  for (const row of rows) {
+    if (!row) continue;
+    out[row.key] = row;
+  }
+  return out;
+}
+
 export async function getJiraIssuePRs(issueIds: string[]): Promise<Record<string, LinkedPR[]>> {
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
@@ -627,6 +799,7 @@ export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssu
     'updated',
     'created',
     'resolutiondate',
+    'resolution',
     'issuetype',
     'parent',
     'customfield_10014',
@@ -661,6 +834,7 @@ export async function getJiraIssuesByKeys(issueKeys: string[]): Promise<JiraIssu
         updated: issue.fields.updated,
         created: issue.fields.created,
         resolutiondate: issue.fields.resolutiondate,
+        resolution: issue.fields.resolution?.name,
         issueType: (issueTypeField as { name?: string } | undefined)?.name,
         isSubtask: isJiraSubtaskField(issueTypeField),
         parentKey: ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key,
@@ -714,6 +888,7 @@ export async function getJiraIssuesUpdated(params: {
     'updated',
     'created',
     'resolutiondate',
+    'resolution',
     cfg.jiraStoryPointsField,
     'parent',
     'customfield_10014', // Epic Link
@@ -757,6 +932,7 @@ export async function getJiraIssuesUpdated(params: {
       updated: issue.fields.updated,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
+      resolution: issue.fields.resolution?.name,
       parentKey: ((issue.fields as Record<string, unknown>).parent as { key?: string } | undefined)?.key,
       epicKey: (issue.fields as Record<string, unknown>).customfield_10014 as (string | undefined),
     });
@@ -802,6 +978,7 @@ export async function getJiraIssuesAssignedToQa(params: {
     'updated',
     'created',
     'resolutiondate',
+    'resolution',
     'issuetype',
     'parent',
     'customfield_10014',
@@ -853,6 +1030,7 @@ export async function getJiraIssuesAssignedToQa(params: {
       updated: issue.fields.updated,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
+      resolution: issue.fields.resolution?.name,
       issueType: (issueTypeField as { name?: string } | undefined)?.name,
       isSubtask,
       parentKey,
