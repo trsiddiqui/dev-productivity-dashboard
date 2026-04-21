@@ -97,6 +97,19 @@ function eventDate(pr: PR, dateMode: ContributionResponse['dateMode']): string {
   return (dateMode === 'merged' ? pr.mergedAt : pr.createdAt)?.slice(0, 10) ?? '-';
 }
 
+function currentPrLoc(pr: PR, prAdjustments?: ContributionPrAdjustmentMap): number {
+  const adjustment = prAdjustments?.[pr.id];
+  return (adjustment?.additions ?? pr.additions ?? 0) + (adjustment?.deletions ?? pr.deletions ?? 0);
+}
+
+function prCommentTotal(pr: PR): number {
+  const prWithComments = pr as PR & {
+    conversationCommentCount?: number;
+    totalCommentCount?: number;
+  };
+  return prWithComments.totalCommentCount ?? ((prWithComments.conversationCommentCount ?? 0) + (pr.reviewThreadCommentCount ?? 0));
+}
+
 function DateWithWeekday({ date }: { date: string }): JSX.Element {
   const weekday = weekdayLabelFromDate(date);
   return (
@@ -343,17 +356,20 @@ export function useContributionProfileSections({
     }
   }, [availableLinkSources, selectedLinkSource]);
 
-  const topPRs = useMemo(
+  const sortedPRs = useMemo(
     () => [...(allPrs ?? data.prs)]
       .sort((left, right) => {
-        const leftAdjustment = prAdjustments?.[left.id];
-        const rightAdjustment = prAdjustments?.[right.id];
-        const leftLoc = (leftAdjustment?.additions ?? left.additions ?? 0) + (leftAdjustment?.deletions ?? left.deletions ?? 0);
-        const rightLoc = (rightAdjustment?.additions ?? right.additions ?? 0) + (rightAdjustment?.deletions ?? right.deletions ?? 0);
-        return rightLoc - leftLoc;
-      })
-      .slice(0, 6),
-    [allPrs, data.prs, prAdjustments],
+        const leftLoc = currentPrLoc(left, prAdjustments);
+        const rightLoc = currentPrLoc(right, prAdjustments);
+        if (rightLoc !== leftLoc) return rightLoc - leftLoc;
+
+        const leftDate = eventDate(left, data.dateMode);
+        const rightDate = eventDate(right, data.dateMode);
+        if (rightDate !== leftDate) return rightDate.localeCompare(leftDate);
+
+        return right.number - left.number;
+      }),
+    [allPrs, data.dateMode, data.prs, prAdjustments],
   );
 
   const slowestIssues = useMemo(
@@ -871,131 +887,135 @@ export function useContributionProfileSections({
       id: 'largest-prs',
       node: (
         <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', border: '1px solid var(--panel-br)', borderRadius: 12, padding: 16 }}>
-        <div style={{ marginBottom: 8 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 600 }}>Largest Dev PRs in the Window</h3>
-          <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
-            Useful for checking whether the output is spread across several PRs or concentrated in one or two large drops.
-          </p>
-        </div>
-        {topPRs.length === 0 ? (
-          <div style={{ fontSize: 14, color: 'var(--panel-muted)' }}>No matching tracked-base PRs landed in this window.</div>
-        ) : (
-          <div style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Use</th>
-                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Date</th>
-                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>PR</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>LOC</th>
-                  <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Adjustments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topPRs.map((pr, index) => (
-                  <tr
-                    key={pr.id}
-                    style={{
-                      opacity: (prAdjustments?.[pr.id]?.selected ?? true) ? 1 : 0.55,
-                    }}
-                  >
-                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', verticalAlign: 'top' }}>
-                      <input
-                        type="checkbox"
-                        checked={prAdjustments?.[pr.id]?.selected ?? true}
-                        onChange={() => onTogglePrSelected?.(pr.id)}
-                        aria-label={`Include PR #${pr.number}`}
-                        disabled={!onTogglePrSelected}
-                      />
-                    </td>
-                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', whiteSpace: 'nowrap' }}>
-                      <DateWithWeekday date={eventDate(pr, data.dateMode)} />
-                    </td>
-                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
-                      {maskIdentity ? (
-                        <div>
-                          <div>{maskedEntityLabel('PR', index)}</div>
-                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                            Repository and branch hidden
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <a href={pr.url} target="_blank" rel="noreferrer">
-                            #{pr.number} {pr.title}
-                          </a>
-                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                            {pr.repository.owner}/{pr.repository.name}
-                            {pr.headRefName ? ` - ${pr.headRefName}` : ''}
-                          </div>
-                        </>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {((prAdjustments?.[pr.id]?.additions ?? pr.additions ?? 0) + (prAdjustments?.[pr.id]?.deletions ?? pr.deletions ?? 0)).toLocaleString()}
-                    </td>
-                    <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', minWidth: 240 }}>
-                      {!onPrAdjustmentChange ? null : editingPrId === pr.id ? (
-                        <div style={{ display: 'grid', gap: 8 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-                            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                              Additions
-                              <input
-                                type="number"
-                                min={0}
-                                value={prAdjustments?.[pr.id]?.additions ?? pr.additions ?? 0}
-                                onChange={(event) => onPrAdjustmentChange(pr.id, 'additions', Number(event.target.value) || 0)}
-                                style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
-                              />
-                            </label>
-                            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
-                              Deletions
-                              <input
-                                type="number"
-                                min={0}
-                                value={prAdjustments?.[pr.id]?.deletions ?? pr.deletions ?? 0}
-                                onChange={(event) => onPrAdjustmentChange(pr.id, 'deletions', Number(event.target.value) || 0)}
-                                style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
-                              />
-                            </label>
-                          </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                              type="button"
-                              onClick={() => setEditingPrId(null)}
-                              style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                            >
-                              Done
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onPrAdjustmentChange(pr.id, 'additions', pr.additions ?? 0);
-                                onPrAdjustmentChange(pr.id, 'deletions', pr.deletions ?? 0);
-                              }}
-                              style={{ border: '1px solid var(--panel-br)', background: 'transparent', color: 'var(--panel-muted)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                            >
-                              Reset
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setEditingPrId(pr.id)}
-                          style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                        >
-                          Adjust LOC
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginBottom: 8 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600 }}>Dev PRs in the Window</h3>
+            <p style={{ marginTop: 4, fontSize: 13, color: 'var(--panel-muted)' }}>
+              Full tracked-base PR list sorted by LOC descending. Comments include PR conversation comments plus threaded review comments.
+            </p>
           </div>
-        )}
-      </div>
+          {sortedPRs.length === 0 ? (
+            <div style={{ fontSize: 14, color: 'var(--panel-muted)' }}>No matching tracked-base PRs landed in this window.</div>
+          ) : (
+            <div style={{ overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Use</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Date</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>PR</th>
+                    <th style={{ textAlign: 'right', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>LOC</th>
+                    <th style={{ textAlign: 'right', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Comments</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--panel-br)' }}>Adjustments</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedPRs.map((pr, index) => (
+                    <tr
+                      key={pr.id}
+                      style={{
+                        opacity: (prAdjustments?.[pr.id]?.selected ?? true) ? 1 : 0.55,
+                      }}
+                    >
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', verticalAlign: 'top' }}>
+                        <input
+                          type="checkbox"
+                          checked={prAdjustments?.[pr.id]?.selected ?? true}
+                          onChange={() => onTogglePrSelected?.(pr.id)}
+                          aria-label={`Include PR #${pr.number}`}
+                          disabled={!onTogglePrSelected}
+                        />
+                      </td>
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', whiteSpace: 'nowrap' }}>
+                        <DateWithWeekday date={eventDate(pr, data.dateMode)} />
+                      </td>
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)' }}>
+                        {maskIdentity ? (
+                          <div>
+                            <div>{maskedEntityLabel('PR', index)}</div>
+                            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                              Repository and branch hidden
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <a href={pr.url} target="_blank" rel="noreferrer">
+                              #{pr.number} {pr.title}
+                            </a>
+                            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                              {pr.repository.owner}/{pr.repository.name}
+                              {pr.headRefName ? ` - ${pr.headRefName}` : ''}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {currentPrLoc(pr, prAdjustments).toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {prCommentTotal(pr).toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 0', borderBottom: '1px solid var(--panel-br)', minWidth: 240 }}>
+                        {!onPrAdjustmentChange ? null : editingPrId === pr.id ? (
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                                Additions
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={prAdjustments?.[pr.id]?.additions ?? pr.additions ?? 0}
+                                  onChange={(event) => onPrAdjustmentChange(pr.id, 'additions', Number(event.target.value) || 0)}
+                                  style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
+                                />
+                              </label>
+                              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--panel-muted)' }}>
+                                Deletions
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={prAdjustments?.[pr.id]?.deletions ?? pr.deletions ?? 0}
+                                  onChange={(event) => onPrAdjustmentChange(pr.id, 'deletions', Number(event.target.value) || 0)}
+                                  style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)' }}
+                                />
+                              </label>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => setEditingPrId(null)}
+                                style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                              >
+                                Done
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onPrAdjustmentChange(pr.id, 'additions', pr.additions ?? 0);
+                                  onPrAdjustmentChange(pr.id, 'deletions', pr.deletions ?? 0);
+                                }}
+                                style={{ border: '1px solid var(--panel-br)', background: 'transparent', color: 'var(--panel-muted)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingPrId(pr.id)}
+                            style={{ border: '1px solid var(--panel-br)', background: 'var(--card-bg)', color: 'var(--card-fg)', borderRadius: 999, padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                          >
+                            Adjust LOC
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       ),
     },
   ];
