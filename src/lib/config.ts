@@ -47,47 +47,43 @@ function resolveEnvConfig(): RuntimeConfig {
 
 const envConfig = resolveEnvConfig();
 
-function resolveIncompleteRuntimeConfig(): RuntimeConfig {
+function mergeRuntimeConfig(
+  stored?: Partial<RuntimeSettingsFields> | null,
+): RuntimeConfig {
   const defaults = getDefaultRuntimeSettingsFields();
   return {
     ...envConfig,
-    githubToken: '',
-    githubOrg: '',
-    jiraBaseUrl: defaults.jiraBaseUrl,
-    jiraEmail: '',
-    jiraToken: '',
-    jiraStoryPointsField: defaults.jiraStoryPointsField,
-    jiraQAAssigneeField: envConfig.jiraQAAssigneeField,
-    testRailBaseUrl: '',
-    testRailEmail: '',
-    testRailToken: '',
+    githubToken: stored?.githubToken?.trim() || envConfig.githubToken,
+    githubOrg: stored?.githubOrg?.trim() || envConfig.githubOrg,
+    jiraBaseUrl: stored?.jiraBaseUrl?.trim() || envConfig.jiraBaseUrl || defaults.jiraBaseUrl,
+    jiraEmail: stored?.jiraEmail?.trim() || envConfig.jiraEmail,
+    jiraToken: stored?.jiraToken?.trim() || envConfig.jiraToken,
+    jiraStoryPointsField:
+      stored?.jiraStoryPointsField?.trim()
+      || envConfig.jiraStoryPointsField
+      || defaults.jiraStoryPointsField,
+    jiraQAAssigneeField:
+      stored?.jiraQAAssigneeField?.trim()
+      || envConfig.jiraQAAssigneeField
+      || defaults.jiraQAAssigneeField,
+    testRailBaseUrl: stored?.testRailBaseUrl?.trim() || envConfig.testRailBaseUrl,
+    testRailEmail: stored?.testRailEmail?.trim() || envConfig.testRailEmail,
+    testRailToken: stored?.testRailToken?.trim() || envConfig.testRailToken,
   };
 }
 
 function resolveRuntimeConfigFromStoredSettings(): RuntimeConfig {
-  return envConfig;
+  return mergeRuntimeConfig();
 }
 
 export function resolveRuntimeConfigForRequest(req: Request, authUser: string): RuntimeConfig {
   const raw = readCookie(req, RUNTIME_SETTINGS_COOKIE_NAME);
   const stored = parseStoredRuntimeSettings(raw);
   if (!stored || stored.username !== authUser) {
-    return resolveIncompleteRuntimeConfig();
+    return mergeRuntimeConfig();
   }
 
-  return {
-    ...envConfig,
-    githubToken: stored.githubToken,
-    githubOrg: stored.githubOrg,
-    jiraBaseUrl: stored.jiraBaseUrl,
-    jiraEmail: stored.jiraEmail,
-    jiraToken: stored.jiraToken,
-    jiraStoryPointsField: stored.jiraStoryPointsField,
-    jiraQAAssigneeField: stored.jiraQAAssigneeField || envConfig.jiraQAAssigneeField,
-    testRailBaseUrl: stored.testRailBaseUrl,
-    testRailEmail: stored.testRailEmail,
-    testRailToken: stored.testRailToken,
-  };
+  return mergeRuntimeConfig(stored);
 }
 
 export function getRuntimeSettingsFingerprintForRequest(req: Request, authUser: string): string {

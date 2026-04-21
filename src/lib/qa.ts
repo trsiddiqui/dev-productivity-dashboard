@@ -318,7 +318,7 @@ function getFeatureArea(path: string): string | null {
   return null;
 }
 
-async function computeGithubAutomationSummary(params: {
+export async function computeGithubAutomationSummary(params: {
   login: string;
   from: string;
   to: string;
@@ -343,6 +343,7 @@ async function computeGithubAutomationSummary(params: {
       medianFilesChangedPerPr: null,
       engineeringFilesChanged: 0,
       featureCoverageBreadth: 0,
+      featureAreas: [],
     };
   }
 
@@ -394,6 +395,7 @@ async function computeGithubAutomationSummary(params: {
     medianFilesChangedPerPr: median(filesPerPr),
     engineeringFilesChanged,
     featureCoverageBreadth: featureAreas.size,
+    featureAreas: Array.from(featureAreas).sort((left, right) => left.localeCompare(right)),
   };
 }
 

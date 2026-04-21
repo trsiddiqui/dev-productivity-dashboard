@@ -64,6 +64,7 @@ export interface JiraIssue {
   summary: string;
   assignee?: string;
   resolutiondate?: string;
+  resolution?: string;
   storyPoints?: number;
   status?: string;
   url: string;
@@ -274,6 +275,7 @@ export interface QaGithubAutomationSummary {
   medianFilesChangedPerPr: number | null;
   engineeringFilesChanged: number;
   featureCoverageBreadth: number;
+  featureAreas?: string[];
 }
 
 export interface QaJiraAssignmentSummary {
@@ -527,5 +529,133 @@ export interface JiraProjectLite {
 
 export interface ProjectsResponse {
   projects: JiraProjectLite[];
+  warnings?: string[];
+}
+
+export interface ManagementMetricDefinition {
+  id: string;
+  name: string;
+  category: 'Delivery' | 'Flow' | 'Quality' | 'Risk' | 'Collaboration' | 'QA' | 'Automation';
+  description: string;
+  derivation: string;
+}
+
+export interface ManagementEngineeringSummary {
+  developerCount: number;
+  mergedPrs: number;
+  touchedTicketStoryPoints: number;
+  medianLeadTimeHours: number | null;
+  medianReviewResponseHours: number | null;
+  medianReviewToMergeHours: number | null;
+  changesRequestedRate: number | null;
+  reviewSlaHitRate: number | null;
+  agingOpenPrCount: number;
+  agingActiveIssueCount: number;
+  reopenedWorkRate: number | null;
+  weekendActivityRate: number | null;
+  totalReviewsGiven: number;
+  totalReviewCommentsGiven: number;
+}
+
+export interface ManagementQaSummary {
+  qaCount: number;
+  projectId: number | null;
+  projectName?: string;
+  totalResults: number;
+  uniqueTests: number;
+  passRate: number | null;
+  failurePressureRate: number | null;
+  defectsLinked: number;
+  assignedTicketCount: number;
+  assignedStoryPoints: number;
+  medianQueueWaitHours: number | null;
+  medianQaCycleHours: number | null;
+  qaBounceRate: number | null;
+  reopenedAfterSignoffRate: number | null;
+  medianBugTurnaroundHours: number | null;
+  defectRejectionRate: number | null;
+  automationCoverageBreadth: number;
+  automationMaintenanceRatio: number | null;
+  mixedOutcomeTestRate: number | null;
+}
+
+export interface ManagementRiskSummary {
+  agingOpenPrCount: number;
+  agingActiveIssueCount: number;
+  reopenedIssueCount: number;
+  qaBounceIssueCount: number;
+  reopenedAfterSignoffCount: number;
+  rejectedDefectCount: number;
+  weekendActivityRate: number | null;
+}
+
+export interface ManagementEngineeringMember {
+  alias: string;
+  name: string;
+  githubLogin: string;
+  jiraDisplayName?: string;
+  mergedPrs: number;
+  touchedTicketStoryPoints: number;
+  medianLeadTimeHours: number | null;
+  medianReviewResponseHours: number | null;
+  changesRequestedRate: number | null;
+  agingOpenPrCount: number;
+  reopenedIssueCount: number;
+  weekendActivityRate: number | null;
+  totalReviewsGiven: number;
+  totalReviewCommentsGiven: number;
+}
+
+export interface ManagementQaMember {
+  alias: string;
+  name: string;
+  githubLogin?: string;
+  jiraDisplayName?: string;
+  testRailUserName?: string;
+  totalResults: number;
+  uniqueTests: number;
+  passRate: number | null;
+  failurePressureRate: number | null;
+  defectsLinked: number;
+  assignedTicketCount: number;
+  assignedStoryPoints: number;
+  medianQueueWaitHours: number | null;
+  medianQaCycleHours: number | null;
+  qaBounceIssueCount: number;
+  reopenedAfterSignoffCount: number;
+  medianBugTurnaroundHours: number | null;
+  automationCoverageBreadth: number;
+  automationMaintenanceRatio: number | null;
+  mixedOutcomeTestRate: number | null;
+}
+
+export interface ManagementDeliveryDailyPoint {
+  date: string;
+  mergedPrs: number;
+  qaResults: number;
+  defectsLinked: number;
+}
+
+export interface ManagementRiskDailyPoint {
+  date: string;
+  agingOpenPrs: number;
+  agingActiveIssues: number;
+  reopenedIssues: number;
+  qaBounceIssues: number;
+}
+
+export interface ManagementOverviewResponse {
+  from: string;
+  to: string;
+  timezone: string;
+  engineering: ManagementEngineeringSummary;
+  qa: ManagementQaSummary;
+  risk: ManagementRiskSummary;
+  engineeringMembers: ManagementEngineeringMember[];
+  qaMembers: ManagementQaMember[];
+  deliveryDaily: ManagementDeliveryDailyPoint[];
+  riskDaily: ManagementRiskDailyPoint[];
+  qaProjects: TestRailProjectLite[];
+  metricDefinitions: ManagementMetricDefinition[];
   warnings?: string[];
 }

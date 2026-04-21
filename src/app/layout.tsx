@@ -8,6 +8,7 @@ import AppHeader from "./components/AppHeader";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifyToken } from "@/lib/auth";
 import {
+  areCoreRuntimeSettingsComplete,
   DEFAULT_JIRA_BASE_URL,
   DEFAULT_JIRA_QA_ASSIGNEE_FIELD,
   DEFAULT_JIRA_STORY_POINTS_FIELD,
@@ -30,6 +31,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const token = (await cookies()).get(COOKIE_NAME)?.value ?? null;
   const user = await verifyToken(token);
   const authed = !!user;
+  const serverConfigured = areCoreRuntimeSettingsComplete({
+    githubToken: process.env.GITHUB_TOKEN,
+    githubOrg: process.env.GITHUB_ORG,
+    jiraBaseUrl: process.env.JIRA_BASE_URL,
+    jiraEmail: process.env.JIRA_EMAIL,
+    jiraToken: process.env.JIRA_API_TOKEN,
+    jiraStoryPointsField: process.env.JIRA_STORY_POINTS_FIELD,
+    jiraQAAssigneeField: process.env.JIRA_QA_ASSIGNEE_FIELD,
+    testRailBaseUrl: process.env.TESTRAIL_BASE_URL,
+    testRailEmail: process.env.TESTRAIL_EMAIL,
+    testRailToken: process.env.TESTRAIL_API_TOKEN,
+  });
   const runtimeSettingsBootstrapScript = authed ? `
     (function(){
       try{
@@ -91,7 +104,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         )}
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SettingsAccessGate username={user ?? ''}>
+        <SettingsAccessGate username={user ?? ''} serverConfigured={serverConfigured}>
           {authed && (
             <AppHeader username={user ?? ''} />
           )}
