@@ -39,6 +39,7 @@ interface GHPullRequestNode {
   firstCommits: GHCommitConnection;
   lastCommits: { nodes: GHCommitNode[] };
   repository: GHRepo;
+  comments?: { totalCount?: number } | null;
   reviews: GHReviewConnection;
   reviewThreads?: {
     nodes?: Array<{ comments?: { totalCount?: number } | null }>;
@@ -87,6 +88,11 @@ interface GHReviewContributionResponse {
   };
   errors?: unknown;
 }
+
+type PullRequestWithCommentCounts = PR & {
+  conversationCommentCount?: number;
+  totalCommentCount?: number;
+};
 
 export async function getGithubPRsWithStats(params: {
   login: string;
@@ -158,6 +164,9 @@ export async function getGithubPRsWithStats(params: {
                 }
               }
               repository { name owner { login } }
+              comments(first: 1) {
+                totalCount
+              }
 
               reviews(first: 100) {
                 totalCount
@@ -188,7 +197,7 @@ export async function getGithubPRsWithStats(params: {
     'Content-Type': 'application/json',
   };
 
-  const out: PR[] = [];
+  const out: PullRequestWithCommentCounts[] = [];
   let after: string | null = null;
   let hasNext = true;
 
@@ -218,10 +227,12 @@ export async function getGithubPRsWithStats(params: {
       let approvalCount = 0;
       let changesRequestedCount = 0;
       let commentReviewCount = 0;
+      const conversationCommentCount = n.comments?.totalCount ?? 0;
       const reviewThreadCommentCount = n.reviewThreads?.nodes?.reduce(
         (sum, thread) => sum + (thread.comments?.totalCount ?? 0),
         0,
       ) ?? 0;
+      const totalCommentCount = conversationCommentCount + reviewThreadCommentCount;
       for (const r of n.reviews.nodes) {
         if (r.submittedAt) {
           if (!firstReviewAt || r.submittedAt < firstReviewAt) firstReviewAt = r.submittedAt;
@@ -263,7 +274,9 @@ export async function getGithubPRsWithStats(params: {
         approvalCount,
         changesRequestedCount,
         commentReviewCount,
+        conversationCommentCount,
         reviewThreadCommentCount,
+        totalCommentCount,
         repository: { owner: n.repository.owner.login, name: n.repository.name },
         firstReviewAt,
         readyForReviewAt,

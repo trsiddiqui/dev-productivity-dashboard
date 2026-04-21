@@ -10,6 +10,7 @@ import ThemeSelect from './ThemeSelect';
 const NAV_ITEMS = [
   { href: '/individual', label: 'Individual' },
   { href: '/contributions', label: 'Contributions' },
+  { href: '/management', label: 'Management' },
   { href: '/sprint', label: 'Sprint' },
   { href: '/qa', label: 'QA' },
   { href: '/settings', label: 'Settings' },

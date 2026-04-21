@@ -9,6 +9,7 @@
     "lint": "eslint",
     "capture:dev": "node testing/run-capture.mjs dev",
     "capture:qa": "node testing/run-capture.mjs qa",
+    "verify:management": "node testing/verify-management-overview.mjs",
     "report:setup": "npm --prefix reports/productivity_20260414 install",
     "report:productivity": "node reports/run-productivity-reports.mjs",
     "report:productivity:reuse": "node reports/run-productivity-reports.mjs --reuse-data"
