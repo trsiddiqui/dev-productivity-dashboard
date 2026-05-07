@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getRuntimeSettingsFingerprintForRequest } from './config';
 
 const ROUTE_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
+const ROUTE_CACHE_VERSION = 'v4';
 
 type CacheStatus = 'BYPASS' | 'HIT' | 'MISS';
 
@@ -62,7 +63,7 @@ function normalizeRequestTarget(req: Request): string {
 
 function buildCacheKey(req: Request, authUser: string, namespace: string): string {
   const settingsFingerprint = getRuntimeSettingsFingerprintForRequest(req, authUser);
-  return ['dpd', 'route-cache', 'v2', namespace, authUser, settingsFingerprint, normalizeRequestTarget(req)].join(':');
+  return ['dpd', 'route-cache', ROUTE_CACHE_VERSION, namespace, authUser, settingsFingerprint, normalizeRequestTarget(req)].join(':');
 }
 
 function shouldCachePayload(payload: unknown): boolean {

@@ -102,6 +102,7 @@ export async function getGithubPRsWithStats(params: {
   repo?: string;
   mergedOnly?: boolean;
   dateField?: GithubPRDateField;
+  trackedBaseOnly?: boolean;
 }): Promise<PR[]> {
   const {
     login,
@@ -111,11 +112,12 @@ export async function getGithubPRsWithStats(params: {
     repo,
     mergedOnly = false,
     dateField = 'created',
+    trackedBaseOnly = true,
   } = params;
   if (!cfg.githubToken) throw new Error('Missing GITHUB_TOKEN');
 
   const scope = buildScopeFilter(repo);
-  const baseSearchFilter = buildBaseBranchSearchFilter(repo, baseBranch);
+  const baseSearchFilter = trackedBaseOnly ? buildBaseBranchSearchFilter(repo, baseBranch) : '';
   const q = [
     'is:pr',
     `author:${login}`,
@@ -215,7 +217,7 @@ export async function getGithubPRsWithStats(params: {
 
     for (const edge of data.edges) {
       const n = edge.node;
-      if (!isMatchingTrackedBaseBranch(n.repository, n.baseRefName, baseBranch)) continue;
+      if (trackedBaseOnly && !isMatchingTrackedBaseBranch(n.repository, n.baseRefName, baseBranch)) continue;
       if (mergedOnly && !n.mergedAt) continue;
 
       const firstCommitNode = n.firstCommits.nodes[0]?.commit;

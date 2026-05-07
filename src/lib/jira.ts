@@ -37,6 +37,44 @@ function normalizedBase(): string {
   }
 }
 
+function requireJiraCredentials(resource: string): void {
+  if (cfg.jiraBaseUrl && cfg.jiraEmail && cfg.jiraToken) return;
+  throw new Error(`Missing Jira credentials while loading ${resource}. Check Jira base URL, email, and API token.`);
+}
+
+async function jiraErrorDetail(resp: Response): Promise<string> {
+  try {
+    const e = await resp.clone().json() as { errorMessages?: string[]; errors?: Record<string, unknown>; message?: string };
+    const msgs = [
+      ...(e.errorMessages ?? []),
+      ...(e.errors ? [JSON.stringify(e.errors)] : []),
+      e.message,
+    ].filter(Boolean);
+    if (msgs.length > 0) return msgs.join('; ');
+  } catch {
+    // Fall back to response text below.
+  }
+
+  try {
+    return await resp.text();
+  } catch {
+    return '';
+  }
+}
+
+async function throwJiraFetchError(resource: string, resp: Response): Promise<never> {
+  const detail = await jiraErrorDetail(resp);
+  throw new Error(`Jira ${resource} failed with ${resp.status}${detail ? `: ${detail}` : ''}`);
+}
+
+async function verifyJiraAuthentication(resource: string, auth: string, base: string): Promise<void> {
+  const url = `${base}/rest/api/3/myself`;
+  console.log(`[API FETCH START] GET ${url} (${resource} auth check)`);
+  const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+  console.log(`[API FETCH END] GET ${url} -> ${resp.status}`);
+  if (!resp.ok) await throwJiraFetchError(`${resource} auth check`, resp);
+}
+
 async function runJQL(params: {
   jql: string;
   fields: string[];
@@ -81,7 +119,7 @@ async function runJQL(params: {
 }
 
 export async function getJiraProjects(): Promise<JiraProjectLite[]> {
-  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+  requireJiraCredentials('projects');
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
@@ -111,13 +149,17 @@ export async function getJiraProjects(): Promise<JiraProjectLite[]> {
       console.log(`[API FETCH START] GET ${url2} (fallback)`);
       const resp2 = await fetch(url2, { headers: { Authorization: auth, Accept: 'application/json' } });
       console.log(`[API FETCH END] GET ${url2} -> ${resp2.status}`);
-      if (!resp2.ok) return projects;
+      if (!resp2.ok) await throwJiraFetchError('projects fallback', resp2);
       const arr = await resp2.json() as Array<{ key: string; name: string }>;
       projects.push(...arr.map(p => ({ key: p.key, name: p.name })));
       break;
     }
 
-    return projects;
+    await throwJiraFetchError('projects', resp);
+  }
+
+  if (projects.length === 0) {
+    await verifyJiraAuthentication('projects', auth, base);
   }
 
   projects.sort((a, b) => a.name.localeCompare(b.name));
@@ -214,7 +256,7 @@ export async function getJiraDoneIssues(params: {
 }
 
 export async function getJiraUsers(): Promise<JiraUserLite[]> {
-  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+  requireJiraCredentials('users');
   const base = normalizedBase();
   const auth = 'Basic ' + Buffer.from(`${cfg.jiraEmail}:${cfg.jiraToken}`).toString('base64');
 
@@ -241,7 +283,7 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
         headers: { Authorization: auth, Accept: 'application/json' },
       });
       console.log(`[API FETCH END] GET ${url.toString()} -> ${resp2.status}`);
-      if (!resp2.ok) return out;
+      if (!resp2.ok) await throwJiraFetchError('users fallback', resp2);
       const arr2 = (await resp2.json()) as JiraUser[];
       if (arr2.length === 0) break;
       out.push(...arr2.map(u => ({ accountId: u.accountId, displayName: u.displayName, emailAddress: u.emailAddress })));
@@ -250,7 +292,7 @@ export async function getJiraUsers(): Promise<JiraUserLite[]> {
       continue;
     }
 
-    if (!resp.ok) return out;
+    if (!resp.ok) await throwJiraFetchError('users', resp);
 
     const arr = (await resp.json()) as JiraUser[];
     if (arr.length === 0) break;
@@ -290,7 +332,7 @@ function jiraAuthHeader(): string {
 function jiraBase(): string { return normalizedBase(); }
 
 export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]> {
-  if (!cfg.jiraBaseUrl || !cfg.jiraEmail || !cfg.jiraToken) return [];
+  requireJiraCredentials('sprints');
   const base = jiraBase();
   const auth = jiraAuthHeader();
 
@@ -306,7 +348,7 @@ export async function getJiraSprints(boardId: number): Promise<JiraSprintLite[]>
     console.log(`[API FETCH START] GET ${url.toString()}`);
     const resp = await fetch(url.toString(), { headers: { Authorization: auth, Accept: 'application/json' } });
     console.log(`[API FETCH END] GET ${url.toString()} -> ${resp.status}`);
-    if (!resp.ok) break;
+    if (!resp.ok) await throwJiraFetchError('sprints', resp);
 
     const data = (await resp.json()) as JiraSprintsResp;
     const vals = data.values ?? [];

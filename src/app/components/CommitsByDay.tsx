@@ -54,7 +54,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps): JSX.Element | 
     >
       <div style={{ fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 12, color: 'var(--panel-muted)', marginBottom: 6 }}>{weekday || '-'}</div>
-      <div style={{ fontSize: 13 }}>PRs merged to dev: {prsMerged}</div>
+      <div style={{ fontSize: 13 }}>PRs merged: {prsMerged}</div>
       <div style={{ fontSize: 13 }}>Lines added: {additions}</div>
       <div style={{ fontSize: 13 }}>Lines deleted: {deletions}</div>
     </div>
@@ -113,7 +113,7 @@ export function CommitsByDay({ items }: Props): JSX.Element {
 
   return (
     <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
-      <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Merged to Dev by Day</h2>
+      <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Merged PRs by Day</h2>
       <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <BarChart data={items} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
