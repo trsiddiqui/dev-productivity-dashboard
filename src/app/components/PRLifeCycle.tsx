@@ -4,6 +4,15 @@ import * as React from 'react';
 import type { PRLifecycle, LifecycleStats, JiraIssue } from '../../lib/types';
 import { JSX } from 'react';
 
+type FilteredLifecycleTotals = {
+  additions: number;
+  deletions: number;
+  touchedStoryPoints: number;
+  touchedTicketCount: number;
+  selectedPrIds: string[];
+  locChangedByPrId: Record<string, number>;
+};
+
 function Hrs({ v }: { v?: number | null }): JSX.Element {
   if (v === null || v === undefined) return <span>—</span>;
   if (v >= 48) return <span>{(v / 24).toFixed(1)}d</span>;
@@ -17,6 +26,17 @@ function Num({ v }: { v?: number | null }): JSX.Element {
   return <span>{n.toLocaleString()}</span>;
 }
 
+function rawLocChanged(item: PRLifecycle): number {
+  return (item.additions ?? 0) + (item.deletions ?? 0);
+}
+
+function parseLocOverride(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, Math.round(parsed));
+}
 
 function DateTwoLine({ iso }: { iso?: string | null }): JSX.Element {
   if (!iso) return <span>-</span>;
@@ -57,8 +77,8 @@ export function PRLifecycleView({
   items: PRLifecycle[];
   stats: LifecycleStats;
   tickets?: JiraIssue[];
-  // Callback to bubble up filtered additions/deletions totals based on user selection
-  onFilteredTotalsChange?: (totals: { additions: number; deletions: number }) => void;
+  // Callback to bubble up filtered totals based on user selection.
+  onFilteredTotalsChange?: (totals: FilteredLifecycleTotals) => void;
 }): JSX.Element {
 
   // Lookup maps for Jira fields and parent resolution
@@ -105,6 +125,34 @@ export function PRLifecycleView({
   // Sorting state for primary PR table and secondary ticket-only table
   const [sortMain, setSortMain] = React.useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'PR Created', dir: 'desc' });
   const [sortTickets, setSortTickets] = React.useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'Work Started', dir: 'desc' });
+  const [locOverrides, setLocOverrides] = React.useState<Record<string, number>>({});
+
+  const hasLocOverride = React.useCallback((id: string): boolean => (
+    Object.prototype.hasOwnProperty.call(locOverrides, id)
+  ), [locOverrides]);
+
+  const locChangedFor = React.useCallback((item: PRLifecycle): number => (
+    hasLocOverride(item.id) ? locOverrides[item.id] : rawLocChanged(item)
+  ), [hasLocOverride, locOverrides]);
+
+  const setLocOverride = React.useCallback((id: string, value: string) => {
+    const parsed = parseLocOverride(value);
+    setLocOverrides((current) => {
+      const next = { ...current };
+      if (parsed === undefined) delete next[id];
+      else next[id] = parsed;
+      return next;
+    });
+  }, []);
+
+  const clearLocOverride = React.useCallback((id: string) => {
+    setLocOverrides((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, id)) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
   const toggleSort = (setter: React.Dispatch<React.SetStateAction<{ col: string; dir: 'asc' | 'desc' }>>, current: { col: string; dir: 'asc' | 'desc' }, col: string) => {
     setter(current.col === col ? { col, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
@@ -162,7 +210,7 @@ export function PRLifecycleView({
           return cmpString(pa, pb) * dirMult(sortMain.dir);
         }
         case 'PR': return (a.number - b.number) * dirMult(sortMain.dir);
-        case 'LOC Changed': return cmpNumber((a.additions ?? 0) + (a.deletions ?? 0), (b.additions ?? 0) + (b.deletions ?? 0)) * dirMult(sortMain.dir);
+        case 'LOC Changed': return cmpNumber(locChangedFor(a), locChangedFor(b)) * dirMult(sortMain.dir);
         case 'Story Points': return cmpNumber(jiraMaps.storyPoints.get(a.jiraKey ?? '') ?? 0, jiraMaps.storyPoints.get(b.jiraKey ?? '') ?? 0) * dirMult(sortMain.dir);
         case 'Work Started': return cmpDate(a.workStartedAt, b.workStartedAt) * dirMult(sortMain.dir);
         case 'PR Created': return cmpDate(a.createdAt, b.createdAt) * dirMult(sortMain.dir);
@@ -172,7 +220,7 @@ export function PRLifecycleView({
       }
     });
     return list;
-  }, [items, sortMain, jiraMaps]);
+  }, [items, sortMain, jiraMaps, locChangedFor]);
 
   // Selection state (all selected by default)
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set(items.map(i => i.id)));
@@ -190,19 +238,49 @@ export function PRLifecycleView({
     });
   }, []);
 
-  // Filtered list for totals (LOC changed & story points)
+  // Filtered list for totals based on checked PR rows.
   const filteredItems = React.useMemo(() => items.filter(i => selectedIds.has(i.id)), [items, selectedIds]);
 
-  // Totals for main table (PRs) considering selection
-  const totalLocChanged = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.additions ?? 0) + (i.deletions ?? 0), 0), [filteredItems]);
-  const totalStoryPointsMain = React.useMemo(() => filteredItems.reduce((a, i) => a + (jiraMaps.storyPoints.get(i.jiraKey ?? '') ?? 0), 0), [filteredItems, jiraMaps]);
+  // Totals for main table (PRs) considering selection.
+  const totalLocChanged = React.useMemo(() => filteredItems.reduce((a, i) => a + locChangedFor(i), 0), [filteredItems, locChangedFor]);
+  const touchedStoryPointSummary = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of filteredItems) {
+      if (item.jiraKey) keys.add(item.jiraKey);
+    }
+
+    let storyPoints = 0;
+    for (const key of keys) {
+      storyPoints += jiraMaps.storyPoints.get(key) ?? 0;
+    }
+
+    return {
+      storyPoints,
+      ticketCount: keys.size,
+    };
+  }, [filteredItems, jiraMaps]);
 
   // Bubble up additions/deletions for KPI overrides
   const filteredAdditions = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.additions ?? 0), 0), [filteredItems]);
   const filteredDeletions = React.useMemo(() => filteredItems.reduce((a, i) => a + (i.deletions ?? 0), 0), [filteredItems]);
+  const filteredPrIds = React.useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
+  const filteredLocChangedByPrId = React.useMemo(() => {
+    const values: Record<string, number> = {};
+    for (const item of filteredItems) {
+      values[item.id] = locChangedFor(item);
+    }
+    return values;
+  }, [filteredItems, locChangedFor]);
   React.useEffect(() => {
-    onFilteredTotalsChange?.({ additions: filteredAdditions, deletions: filteredDeletions });
-  }, [filteredAdditions, filteredDeletions, onFilteredTotalsChange]);
+    onFilteredTotalsChange?.({
+      additions: filteredAdditions,
+      deletions: filteredDeletions,
+      touchedStoryPoints: touchedStoryPointSummary.storyPoints,
+      touchedTicketCount: touchedStoryPointSummary.ticketCount,
+      selectedPrIds: filteredPrIds,
+      locChangedByPrId: filteredLocChangedByPrId,
+    });
+  }, [filteredAdditions, filteredDeletions, filteredLocChangedByPrId, filteredPrIds, onFilteredTotalsChange, touchedStoryPointSummary.storyPoints, touchedStoryPointSummary.ticketCount]);
 
   const ticketOnly = React.useMemo(() => tickets.filter(t => !(t.linkedPRs ?? []).length && !!t.updatedBySelectedUserInWindow), [tickets]);
   const sortedTicketOnly = React.useMemo(() => {
@@ -229,7 +307,6 @@ export function PRLifecycleView({
     <div style={{ background: 'var(--panel-bg)', color: 'var(--panel-fg)', borderRadius: 12, padding: 16, border: '1px solid var(--panel-br)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
       <h2 style={{ fontWeight: 600, marginBottom: 12 }}>PR Lifecycle</h2>
 
-      {}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
         <Kpi label="Median Time to Ready" value={<Hrs v={stats.medianTimeToReadyHours} />} />
         <Kpi label="Median Time to First Review" value={<Hrs v={stats.medianTimeToFirstReviewHours} />} />
@@ -256,112 +333,164 @@ export function PRLifecycleView({
             </tr>
           </thead>
           <tbody>
-            {sortedItems.map(i => (
-              <tr key={i.id} style={{ borderBottom: '1px solid var(--panel-br)' }}>
-                <td style={tdStyle}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(i.id)}
-                    onChange={() => toggleSelected(i.id)}
-                    aria-label={`Include PR #${i.number}`}
-                  />
-                </td>
-                <td style={tdStyle}>
-                  {i.jiraUrl ? (
-                    <a
-                      href={i.jiraUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={i.jiraSummary ? `${i.jiraKey} — ${i.jiraSummary}` : i.jiraKey || ''}
-                      style={{
-                        display: 'inline-block',
-                        maxWidth: 280,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        verticalAlign: 'top'
-                      }}
-                    >
-                      {i.jiraKey} {i.jiraSummary ? `— ${i.jiraSummary}` : ''}
-                    </a>
-                  ) : (
-                    <span>—</span>
-                  )}
-                </td>
-                <td style={tdStyle}>
-                  {(() => {
-                    const p = jiraMaps.getParent(i.jiraKey);
-                    if (!p) return <span>—</span>;
-                    return p.url ? (
-                      <a href={p.url} target="_blank" rel="noreferrer">{p.key}{p.summary ? ` — ${p.summary}` : ''}</a>
+            {sortedItems.map(i => {
+              const originalLoc = rawLocChanged(i);
+              const effectiveLoc = locChangedFor(i);
+              const overridden = hasLocOverride(i.id);
+              return (
+                <tr key={i.id} style={{ borderBottom: '1px solid var(--panel-br)' }}>
+                  <td style={tdStyle}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(i.id)}
+                      onChange={() => toggleSelected(i.id)}
+                      aria-label={`Include PR #${i.number}`}
+                    />
+                  </td>
+                  <td style={tdStyle}>
+                    {i.jiraUrl ? (
+                      <a
+                        href={i.jiraUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={i.jiraSummary ? `${i.jiraKey} — ${i.jiraSummary}` : i.jiraKey || ''}
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: 280,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          verticalAlign: 'top'
+                        }}
+                      >
+                        {i.jiraKey} {i.jiraSummary ? `— ${i.jiraSummary}` : ''}
+                      </a>
                     ) : (
-                      <span>{p.key}{p.summary ? ` — ${p.summary}` : ''}</span>
-                    );
-                  })()}
-                </td>
-                <td style={tdStyle}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <a
-                      href={i.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={`#${i.number} ${i.title}`}
-                      style={{
-                        fontWeight: 500,
-                        display: 'inline-block',
-                        maxWidth: 280,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      #{i.number} {i.title}
-                    </a>
-                    {i.headRefName && (
-                      <span style={{ fontSize: 11, color: 'var(--panel-muted)', fontFamily: 'monospace' }}>{i.headRefName}</span>
+                      <span>—</span>
                     )}
-                  </div>
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  <Num v={(i.additions ?? 0) + (i.deletions ?? 0)} />
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  {i.jiraKey && jiraMaps.storyPoints.has(i.jiraKey) ? (
-                    <Num v={jiraMaps.storyPoints.get(i.jiraKey) ?? 0} />
-                  ) : (
-                    <span>—</span>
-                  )}
-                </td>
+                  </td>
+                  <td style={tdStyle}>
+                    {(() => {
+                      const p = jiraMaps.getParent(i.jiraKey);
+                      if (!p) return <span>—</span>;
+                      return p.url ? (
+                        <a href={p.url} target="_blank" rel="noreferrer">{p.key}{p.summary ? ` — ${p.summary}` : ''}</a>
+                      ) : (
+                        <span>{p.key}{p.summary ? ` — ${p.summary}` : ''}</span>
+                      );
+                    })()}
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <a
+                        href={i.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`#${i.number} ${i.title}`}
+                        style={{
+                          fontWeight: 500,
+                          display: 'inline-block',
+                          maxWidth: 280,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        #{i.number} {i.title}
+                      </a>
+                      {i.headRefName && (
+                        <span style={{ fontSize: 11, color: 'var(--panel-muted)', fontFamily: 'monospace' }}>{i.headRefName}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right', minWidth: 150 }}>
+                    <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
+                      <strong style={{ color: overridden ? 'var(--surface-link)' : 'inherit' }}>
+                        <Num v={effectiveLoc} />
+                      </strong>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={overridden ? locOverrides[i.id] : ''}
+                        placeholder={String(originalLoc)}
+                        aria-label={`Override LOC changed for PR #${i.number}`}
+                        onChange={(event) => setLocOverride(i.id, event.currentTarget.value)}
+                        style={{
+                          width: 92,
+                          padding: '5px 7px',
+                          borderRadius: 7,
+                          border: '1px solid var(--panel-br)',
+                          background: 'var(--card-bg)',
+                          color: 'var(--card-fg)',
+                          textAlign: 'right',
+                        }}
+                      />
+                      {overridden && (
+                        <button
+                          type="button"
+                          onClick={() => clearLocOverride(i.id)}
+                          style={{
+                            border: 0,
+                            background: 'transparent',
+                            color: 'var(--surface-link)',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            padding: 0,
+                          }}
+                        >
+                          Use GitHub value
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    {i.jiraKey && jiraMaps.storyPoints.has(i.jiraKey) ? (
+                      <Num v={jiraMaps.storyPoints.get(i.jiraKey) ?? 0} />
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </td>
 
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  <DateTwoLine iso={i.workStartedAt ?? null} />
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  <DateTwoLine iso={i.createdAt} />
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  <DateTwoLine iso={i.mergedAt ?? null} />
-                </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <DateTwoLine iso={i.workStartedAt ?? null} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <DateTwoLine iso={i.createdAt} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <DateTwoLine iso={i.mergedAt ?? null} />
+                  </td>
 
-                <td style={{ ...tdStyle, borderRight: 'none' }}>
-                  {i.jiraKey && jiraMaps.status.has(i.jiraKey) ? (
-                    <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
-                      {jiraMaps.status.get(i.jiraKey)}
-                    </span>
-                  ) : (
-                    <span>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {/* Total row (not part of sorting) */}
+                  <td style={{ ...tdStyle, borderRight: 'none' }}>
+                    {i.jiraKey && jiraMaps.status.has(i.jiraKey) ? (
+                      <span style={{ padding: '2px 8px', background: 'var(--card-bg)', color: 'var(--card-fg)', border: '1px solid var(--card-br)', borderRadius: 999, fontSize: 12 }}>
+                        {jiraMaps.status.get(i.jiraKey)}
+                      </span>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Total row (not part of sorting). Story points are intentionally not summed per PR row. */}
             <tr style={{ background: 'var(--panel-bg-alt, #1e293b)' }}>
               <td style={tdStyle}><strong>Total</strong></td>
               <td style={tdStyle}>—</td>
               <td style={tdStyle}>—</td>
               <td style={tdStyle}>—</td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalLocChanged} /></strong></td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}><strong><Num v={totalStoryPointsMain} /></strong></td>
+              <td
+                style={{
+                  ...tdStyle,
+                  textAlign: 'right',
+                  background: 'color-mix(in srgb, var(--surface-link) 14%, transparent)',
+                  color: 'var(--panel-fg)',
+                }}
+              >
+                <strong><Num v={totalLocChanged} /></strong>
+              </td>
+              <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
               <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
               <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>
               <td style={{ ...tdStyle, textAlign: 'right' }}>—</td>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DEV_BASE_BRANCH, getGithubPRsWithStats } from '../../../lib/github';
+import { getGithubPRsWithStats } from '../../../lib/github';
 import { getJiraIssuesUpdated, getIssuePhaseTimes, getJiraIssuePRs } from '../../../lib/jira';
 import { aggregateDaily, computeLifecycle } from '../../../lib/aggregate';
 import { aggregateContributionPRsByDay } from '../../../lib/contributions';
@@ -24,7 +24,7 @@ async function getStatsResponse(req: Request): Promise<Response> {
     if (!login || !from || !to) {
       return NextResponse.json({ error: 'Missing required params: login, from, to' }, { status: 400 });
     }
-    const prs = await getGithubPRsWithStats({ login, from, to, baseBranch: DEV_BASE_BRANCH });
+    const prs = await getGithubPRsWithStats({ login, from, to, trackedBaseOnly: false });
 
 
     let jiraIssues: JiraIssue[] = [];
