@@ -1,21 +1,32 @@
-# Blue Stereo Music (Android head-unit app)
+# Song Catcher Overlay
 
-This is an installable Android app project intended for Android-based car stereos/head units.
+Android head-unit app that shows a floating button over other apps. Tap the button to save the currently playing song. Hold the button to open the saved list and share it as a text file, with Bluetooth preferred when the stereo exposes a Bluetooth share target.
 
-## Features implemented
-- Bluetooth media session controls (play/pause/next/previous) via active system media session.
-- Favourites toggle for currently active song.
-- Add current song to playlist.
-- Quick history replay.
-- In-app equalizer UI sliders (bass/mid/treble state).
-- Landscape-first UI suitable for car stereo screens.
+## What it does
+- Starts a small always-on-top overlay button.
+- Reads the active media session metadata through Android notification listener access.
+- Saves each captured song to app-private storage.
+- Shows the saved song list from a long press on the floating button.
+- Exports the list as `captured-songs-YYYYMMDD-HHMMSS.txt`.
+- Opens Bluetooth sharing directly when available, otherwise opens Android's share chooser.
+
+## Required stereo permissions
+1. Open the app.
+2. Grant overlay permission so the button can appear on top of other apps.
+3. Grant notification listener access so the app can read the current track title and artist.
+4. Start the floating button.
+
+Without notification listener access, Android does not reliably expose the currently playing song to normal apps.
 
 ## Build APK
-1. Open folder `android-bluetooth-music-app` in Android Studio (Jellyfish+).
-2. Let Gradle sync and install SDK 35.
-3. Build > Build Bundle(s) / APK(s) > Build APK(s).
-4. Copy generated `app-release.apk` to USB or SD card and install on stereo.
+From this folder:
 
-## Notes
-- Some head units lock background media/session APIs by vendor firmware. If controls do not work, allow notification/media permissions in stereo settings.
-- Equalizer sliders are app-level state. To bind to DSP hardware equalizer, integrate the unit vendor audio SDK.
+```bash
+./gradlew assembleDebug
+```
+
+The debug APK is generated at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```

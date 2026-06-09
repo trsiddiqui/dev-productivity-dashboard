@@ -1,12 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
 
+    <queries>
+        <package android:name="com.android.bluetooth" />
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
-        android:label="Blue Stereo Music"
-        android:icon="@android:drawable/ic_media_play">
+        android:label="@string/app_name"
+        android:icon="@android:drawable/ic_menu_add">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -17,9 +29,39 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SongListActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
         <service
-            android:name=".service.MediaSessionBridgeService"
-            android:exported="false" />
+            android:name=".service.FloatingSongButtonService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating song capture button" />
+        </service>
+
+        <service
+            android:name=".service.SongNotificationListenerService"
+            android:exported="true"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

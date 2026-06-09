@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Blue Stereo Music</string>
+    <string name="app_name">Song Catcher Overlay</string>
+    <string name="notification_listener_label">Song Catcher Metadata Access</string>
 </resources>

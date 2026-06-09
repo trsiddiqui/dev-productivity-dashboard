@@ -19,6 +19,11 @@ node_modules
 
 # production
 /build
+android-bluetooth-music-app/.gradle/
+android-bluetooth-music-app/**/build/
+android-bluetooth-music-app/local.properties
+!android-bluetooth-music-app/releases/
+!android-bluetooth-music-app/releases/*.apk
 
 # misc
 .DS_Store
